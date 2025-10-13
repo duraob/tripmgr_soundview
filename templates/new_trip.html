@@ -1,0 +1,865 @@
+{% extends "base.html" %}
+
+{% block title %}New Trip - Trip Manager{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="max-w-7xl mx-auto">
+        <div class="md:grid md:grid-cols-3 md:gap-6">
+            <div class="md:col-span-1">
+                <div class="px-4 sm:px-0">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900">Create New Trip</h3>
+                    <p class="mt-1 text-sm text-gray-600">
+                        Build a delivery trip by selecting orders from LeafTrade and assigning drivers and vehicles from BioTrack.
+                    </p>
+                    
+                    <!-- Instructions Section -->
+                    <div class="mt-6 space-y-4">
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 mb-2">📋 Before You Start</h4>
+                            <ul class="text-xs text-gray-600 space-y-1">
+                                <li>• Make sure drivers are loaded in BioTrack</li>
+                                <li>• Make sure vehicles are loaded in BioTrack</li>
+                                <li>• Check that orders are available in LeafTrade</li>
+                            </ul>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 mb-2">🚚 How to Create a Trip</h4>
+                            <ol class="text-xs text-gray-600 space-y-2">
+                                <li><strong>Step 1:</strong> Click "Load Orders" to see available orders</li>
+                                <li><strong>Step 2:</strong> Check the boxes for orders you want to deliver</li>
+                                <li><strong>Step 3:</strong> Set the stop number for each order (1, 2, 3, etc.)</li>
+                                <li><strong>Step 4:</strong> Pick two different drivers from the dropdowns</li>
+                                <li><strong>Step 5:</strong> Pick a vehicle from the dropdown</li>
+                                <li><strong>Step 6:</strong> Review the trip summary at the bottom</li>
+                                <li><strong>Step 7:</strong> Click "Create Trip" when ready</li>
+                            </ol>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 mb-2">⚠️ Common Issues & Fixes</h4>
+                            <div class="text-xs text-gray-600 space-y-2">
+                                <div>
+                                    <strong>No orders showing?</strong><br>
+                                    • Check if orders exist in LeafTrade<br>
+                                    • Try different order status (New, Approved, Revised)
+                                </div>
+                                <div>
+                                    <strong>No drivers or vehicles?</strong><br>
+                                    • Go to Config page and refresh drivers/vehicles<br>
+                                    • Check BioTrack connection
+                                </div>
+                                <div>
+                                    <strong>Can't create trip?</strong><br>
+                                    • Make sure you picked 2 different drivers<br>
+                                    • Make sure you picked a vehicle<br>
+                                    • Make sure stop numbers are 1, 2, 3 (no gaps)<br>
+                                    • Make sure all orders have delivery dates
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <div>
+                            <h4 class="text-sm font-medium text-gray-900 mb-2">💡 Tips</h4>
+                            <ul class="text-xs text-gray-600 space-y-1">
+                                <li>• Stop numbers must start at 1 and go in order</li>
+                                <li>• You can't pick the same driver twice</li>
+                                <li>• The trip summary shows your route order</li>
+                                <li>• Check the delivery date before creating the trip</li>
+                            </ul>
+                        </div>
+                    </div>
+                </div>
+            </div>
+            <div class="mt-5 md:mt-0 md:col-span-2">
+                <div class="shadow sm:rounded-md sm:overflow-hidden">
+                    <form id="tripForm">
+                        <div class="px-4 py-5 bg-white space-y-6 sm:p-6">
+                            
+                            <!-- Step 1: Order Selection & Sequencing -->
+                            <div>
+                                <h4 class="text-md font-medium text-gray-900 mb-4">Step 1: Select & Sequence Orders</h4>
+                                <div class="space-y-4">
+                                    <div class="flex items-center space-x-4">
+                                        <select id="orderStatus" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                            <option value="approved">Approved Orders</option>
+                                            <option value="packaged">Packaged Orders</option>
+                                            <option value="revised">Revised Orders</option>
+                                        </select>
+                                        <button type="button" onclick="loadOrders()" class="inline-flex items-center px-3 py-2 border border-transparent text-sm leading-4 font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                            Load Orders
+                                        </button>
+                                        <span id="orderCount" class="text-sm text-gray-500"></span>
+                                    </div>
+                                    <div class="flex items-center space-x-4 mt-2">
+                                        <label class="text-sm font-medium text-gray-700">Filter by Delivery Date:</label>
+                                        <input type="date" id="deliveryDateFilter" class="rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500" onchange="filterOrders()">
+                                        <button type="button" onclick="clearDateFilter()" class="text-sm text-blue-600 hover:text-blue-800">Clear Filter</button>
+                                    </div>
+                                    <div id="ordersList" class="border border-gray-200 rounded-md p-4 max-h-96 overflow-y-auto">
+                                        <p class="text-gray-500 text-sm">Click "Load Orders" to fetch orders from LeafTrade</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 2: Resource Assignment -->
+                            <div>
+                                <h4 class="text-md font-medium text-gray-900 mb-4">Step 2: Assign Resources</h4>
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Driver 1 (Required)</label>
+                                        <div class="relative mt-1">
+                                            <input type="text" 
+                                                   id="driver1-search" 
+                                                   placeholder="Search drivers..." 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                   autocomplete="off">
+                                            <div id="driver1-dropdown" class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                                                <!-- Options will be populated here -->
+                                            </div>
+                                            <input type="hidden" id="driver1" required>
+                                        </div>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Driver 2 (Required)</label>
+                                        <div class="relative mt-1">
+                                            <input type="text" 
+                                                   id="driver2-search" 
+                                                   placeholder="Search drivers..." 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                   autocomplete="off">
+                                            <div id="driver2-dropdown" class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                                                <!-- Options will be populated here -->
+                                            </div>
+                                            <input type="hidden" id="driver2" required>
+                                        </div>
+                                    </div>
+                                    <div class="sm:col-span-2">
+                                        <label class="block text-sm font-medium text-gray-700">Vehicle (Required)</label>
+                                        <div class="relative mt-1">
+                                            <input type="text" 
+                                                   id="vehicle-search" 
+                                                   placeholder="Search vehicles..." 
+                                                   class="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                   autocomplete="off">
+                                            <div id="vehicle-dropdown" class="hidden absolute z-50 w-full bg-white border border-gray-300 rounded-md shadow-lg max-h-60 overflow-y-auto mt-1">
+                                                <!-- Options will be populated here -->
+                                            </div>
+                                            <input type="hidden" id="vehicle" required>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Step 3: Trip Schedule -->
+                            <div>
+                                <h4 class="text-md font-medium text-gray-900 mb-4">Step 3: Trip Schedule</h4>
+                                <div class="grid grid-cols-1 gap-4 sm:grid-cols-2">
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Delivery Date (Required)</label>
+                                        <input type="date" id="deliveryDate" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <p class="mt-1 text-xs text-gray-500">Auto-populated from selected orders</p>
+                                    </div>
+                                    <div>
+                                        <label class="block text-sm font-medium text-gray-700">Approximate Start Time (Required)</label>
+                                        <input type="time" id="startTime" required class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                                        <p class="mt-1 text-xs text-gray-500">When the trip will begin</p>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Trip Summary -->
+                            <div id="tripSummary" class="hidden">
+                                <h4 class="text-md font-medium text-gray-900 mb-4">Trip Summary</h4>
+                                <div class="bg-gray-50 rounded-lg p-4">
+                                    <!-- Resources Section -->
+                                    <div class="mb-4 pb-4 border-b border-gray-200">
+                                        <h5 class="text-sm font-medium text-gray-700 mb-2">Selected Resources</h5>
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-3">
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-600">Driver 1:</span>
+                                                <span id="summaryDriver1" class="ml-1 text-gray-900">Not selected</span>
+                                            </div>
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-600">Driver 2:</span>
+                                                <span id="summaryDriver2" class="ml-1 text-gray-900">Not selected</span>
+                                            </div>
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-600">Vehicle:</span>
+                                                <span id="summaryVehicle" class="ml-1 text-gray-900">Not selected</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Schedule Section -->
+                                    <div class="mb-4 pb-4 border-b border-gray-200">
+                                        <h5 class="text-sm font-medium text-gray-700 mb-2">Trip Schedule</h5>
+                                        <div class="grid grid-cols-1 gap-2 sm:grid-cols-2">
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-600">Delivery Date:</span>
+                                                <span id="summaryDeliveryDate" class="ml-1 text-gray-900">TBD</span>
+                                            </div>
+                                            <div class="text-sm">
+                                                <span class="font-medium text-gray-600">Start Time:</span>
+                                                <span id="summaryStartTime" class="ml-1 text-gray-900">Not selected</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                    
+                                    <!-- Route Sequence Section -->
+                                    <div>
+                                        <h5 class="text-sm font-medium text-gray-700 mb-2">Route Sequence</h5>
+                                        <div id="summarySequence" class="space-y-1 text-sm text-gray-600">
+                                            <!-- Sequence will be populated here -->
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+
+                        </div>
+                        <div class="px-4 py-3 bg-gray-50 text-right sm:px-6 space-x-3">
+                            <button type="button" id="cancelButton" class="inline-flex justify-center py-2 px-4 border border-gray-300 shadow-sm text-sm font-medium rounded-md text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                Cancel
+                            </button>
+                            <button type="submit" class="inline-flex justify-center py-2 px-4 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                                Create Trip
+                            </button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+let allOrders = [];
+let allDrivers = [];
+let allVehicles = [];
+
+// Load orders from LeafTrade API
+async function loadOrders() {
+    const status = document.getElementById('orderStatus').value;
+    const ordersList = document.getElementById('ordersList');
+    const orderCount = document.getElementById('orderCount');
+    const loadButton = document.querySelector('button[onclick="loadOrders()"]');
+    
+    try {
+        // Show loading state
+        loadButton.disabled = true;
+        loadButton.innerHTML = `
+            <svg class="animate-spin -ml-1 mr-2 h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            Loading...
+        `;
+        ordersList.innerHTML = '<p class="text-gray-500 text-sm">Loading orders...</p>';
+        orderCount.textContent = '';
+        
+        const response = await fetch(`/api/orders?status=${status}`);
+        const data = await response.json();
+        
+        if (data.error) {
+            throw new Error(data.error);
+        }
+        
+        allOrders = data.orders || [];
+        displayOrders(allOrders);
+        
+        // Update order count
+        orderCount.textContent = `${allOrders.length} orders available`;
+        
+    } catch (error) {
+        ordersList.innerHTML = `<p class="text-red-500 text-sm">Error loading orders: ${error.message}</p>`;
+        orderCount.textContent = '';
+    } finally {
+        // Reset button state
+        loadButton.disabled = false;
+        loadButton.innerHTML = 'Load Orders';
+    }
+}
+
+// Display orders in the list
+function displayOrders(orders) {
+    const ordersList = document.getElementById('ordersList');
+    
+    if (orders.length === 0) {
+        ordersList.innerHTML = '<p class="text-gray-500 text-sm">No orders found</p>';
+        return;
+    }
+    
+    const ordersHtml = orders.map(order => `
+        <div class="flex items-center space-x-3 p-3 border border-gray-200 rounded-md hover:bg-gray-50" id="order_container_${order.id}">
+            <input type="checkbox" 
+                   id="order_${order.id}" 
+                   value="${order.id}" 
+                   onchange="toggleOrder('${order.id}')" 
+                   class="rounded border-gray-300 text-blue-600 focus:ring-blue-500">
+            <div class="flex-1">
+                <div class="text-sm font-medium text-gray-900">${order.customer_name || 'Unknown Customer'}</div>
+                <div class="text-sm text-gray-500">Order ID: ${order.id}</div>
+                <div class="text-sm text-gray-500">Delivery Date: ${order.delivery_date || 'Not specified'}</div>
+            </div>
+            <div class="flex items-center space-x-2" id="stop_input_${order.id}" style="display: none;">
+                <label class="text-xs text-gray-600">Stop #</label>
+                <input type="number" 
+                       min="1" 
+                       value="1" 
+                       onchange="updateStopNumber('${order.id}', this.value)"
+                       class="w-16 px-2 py-1 text-xs border border-gray-300 rounded focus:ring-blue-500 focus:border-blue-500">
+            </div>
+            <div class="text-xs text-gray-400" id="select_text_${order.id}">
+                Click to select
+            </div>
+        </div>
+    `).join('');
+    
+    ordersList.innerHTML = ordersHtml;
+}
+
+// Filter orders by delivery date
+function filterOrders() {
+    const selectedDate = document.getElementById('deliveryDateFilter').value;
+    const orderCount = document.getElementById('orderCount');
+    
+    if (!selectedDate) {
+        displayOrders(allOrders);
+        orderCount.textContent = `${allOrders.length} orders available`;
+        return;
+    }
+    
+    const filteredOrders = allOrders.filter(order => order.delivery_date === selectedDate);
+    displayOrders(filteredOrders);
+    orderCount.textContent = `${filteredOrders.length} orders available (filtered)`;
+}
+
+// Clear date filter
+function clearDateFilter() {
+    document.getElementById('deliveryDateFilter').value = '';
+    displayOrders(allOrders);
+    document.getElementById('orderCount').textContent = `${allOrders.length} orders available`;
+}
+
+// Simple toggle function - directly manipulates DOM
+function toggleOrder(orderId) {
+    const checkbox = document.getElementById(`order_${orderId}`);
+    const container = document.getElementById(`order_container_${orderId}`);
+    const stopInput = document.getElementById(`stop_input_${orderId}`);
+    const selectText = document.getElementById(`select_text_${orderId}`);
+    
+    if (checkbox.checked) {
+        // Show stop input and highlight
+        container.classList.add('bg-blue-50', 'border-blue-200');
+        stopInput.style.display = 'flex';
+        selectText.style.display = 'none';
+        
+        // Set default stop number
+        const stopNumberInput = stopInput.querySelector('input');
+        if (stopNumberInput) {
+            const currentStopCount = document.querySelectorAll('[id^="stop_input_"]:not([style*="display: none"])').length;
+            stopNumberInput.value = currentStopCount;
+        }
+    } else {
+        // Hide stop input and remove highlight
+        container.classList.remove('bg-blue-50', 'border-blue-200');
+        stopInput.style.display = 'none';
+        selectText.style.display = 'block';
+    }
+    
+    updateTripSummary();
+    updateDeliveryDate();
+}
+
+// Update stop number for an order
+function updateStopNumber(orderId, newStopNumber) {
+    // This function can be used for validation or additional logic
+    // For now, just update the trip summary
+    updateTripSummary();
+}
+
+// Update delivery date from selected orders
+function updateDeliveryDate() {
+    const deliveryDateInput = document.getElementById('deliveryDate');
+    const summaryDeliveryDate = document.getElementById('summaryDeliveryDate');
+    
+    // Get all selected orders
+    const selectedOrders = [];
+    allOrders.forEach(order => {
+        const checkbox = document.getElementById(`order_${order.id}`);
+        if (checkbox && checkbox.checked) {
+            selectedOrders.push(order);
+        }
+    });
+    
+    if (selectedOrders.length === 0) {
+        deliveryDateInput.value = '';
+        summaryDeliveryDate.textContent = 'TBD';
+        return;
+    }
+    
+    // Check if all orders have the same delivery date
+    const deliveryDates = selectedOrders.map(order => order.delivery_date).filter(date => date && date !== 'Not specified');
+    
+    if (deliveryDates.length === 0) {
+        deliveryDateInput.value = '';
+        summaryDeliveryDate.textContent = 'TBD';
+        return;
+    }
+    
+    const uniqueDates = [...new Set(deliveryDates)];
+    if (uniqueDates.length === 1) {
+        // All orders have the same delivery date
+        deliveryDateInput.value = uniqueDates[0];
+        summaryDeliveryDate.textContent = uniqueDates[0];
+    } else {
+        // Multiple delivery dates - clear the field
+        deliveryDateInput.value = '';
+        summaryDeliveryDate.textContent = 'Multiple dates - please select manually';
+    }
+}
+
+// Update trip summary
+function updateTripSummary() {
+    const tripSummary = document.getElementById('tripSummary');
+    const summarySequence = document.getElementById('summarySequence');
+    const summaryDriver1 = document.getElementById('summaryDriver1');
+    const summaryDriver2 = document.getElementById('summaryDriver2');
+    const summaryVehicle = document.getElementById('summaryVehicle');
+    const summaryDeliveryDate = document.getElementById('summaryDeliveryDate');
+    const summaryStartTime = document.getElementById('summaryStartTime');
+    
+    // Get all selected orders
+    const selectedOrders = [];
+    allOrders.forEach(order => {
+        const checkbox = document.getElementById(`order_${order.id}`);
+        if (checkbox && checkbox.checked) {
+            const stopInput = document.getElementById(`stop_input_${order.id}`);
+            const stopNumberInput = stopInput ? stopInput.querySelector('input') : null;
+            const stopNumber = stopNumberInput ? parseInt(stopNumberInput.value) || 1 : 1;
+            
+            selectedOrders.push({
+                ...order,
+                stopNumber: stopNumber
+            });
+        }
+    });
+    
+    if (selectedOrders.length === 0) {
+        tripSummary.classList.add('hidden');
+        return;
+    }
+    
+    tripSummary.classList.remove('hidden');
+    
+    // Sort orders by stop number
+    const sortedOrders = [...selectedOrders].sort((a, b) => a.stopNumber - b.stopNumber);
+    
+    // Update route sequence
+    const sequenceHtml = sortedOrders.map(order => `
+        <div class="text-sm">
+            <span class="font-medium">${order.stopNumber}.</span> ${order.customer_name || 'Unknown Customer'} (Order ID: ${order.id})
+        </div>
+    `).join('');
+    summarySequence.innerHTML = sequenceHtml;
+
+    // Update resources - get the actual selected text from search inputs
+    const driver1Search = document.getElementById('driver1-search');
+    const driver2Search = document.getElementById('driver2-search');
+    const vehicleSearch = document.getElementById('vehicle-search');
+
+    summaryDriver1.textContent = driver1Search.value || 'Not selected';
+    summaryDriver2.textContent = driver2Search.value || 'Not selected';
+    summaryVehicle.textContent = vehicleSearch.value || 'Not selected';
+
+    // Update delivery date
+    const deliveryDateInput = document.getElementById('deliveryDate');
+    summaryDeliveryDate.textContent = deliveryDateInput.value || 'TBD';
+    
+    // Update start time
+    const startTimeInput = document.getElementById('startTime');
+    summaryStartTime.textContent = startTimeInput.value || 'Not selected';
+}
+
+// Load drivers and vehicles on page load
+async function loadResources() {
+    try {
+        // Load drivers
+        const driversResponse = await fetch('/api/drivers');
+        const driversData = await driversResponse.json();
+        if (!driversData.error) {
+            allDrivers = driversData.drivers || [];
+            populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', allDrivers, 'name', 'id');
+            populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', allDrivers, 'name', 'id');
+        } else {
+            console.error('Error loading drivers:', driversData.error);
+            populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', [], 'name', 'id');
+            populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', [], 'name', 'id');
+        }
+        
+        // Load vehicles
+        const vehiclesResponse = await fetch('/api/vehicles');
+        const vehiclesData = await vehiclesResponse.json();
+        if (!vehiclesData.error) {
+            allVehicles = vehiclesData.vehicles || [];
+            populateSearchableDropdown('vehicle-search', 'vehicle-dropdown', 'vehicle', allVehicles, 'name', 'id');
+        } else {
+            console.error('Error loading vehicles:', vehiclesData.error);
+            populateSearchableDropdown('vehicle-search', 'vehicle-dropdown', 'vehicle', [], 'name', 'id');
+        }
+        
+    } catch (error) {
+        console.error('Error loading resources:', error);
+        // Set error states for all dropdowns
+        populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', [], 'name', 'id');
+        populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', [], 'name', 'id');
+        populateSearchableDropdown('vehicle-search', 'vehicle-dropdown', 'vehicle', [], 'name', 'id');
+    }
+}
+
+// Populate searchable dropdown
+function populateSearchableDropdown(searchId, dropdownId, hiddenId, items, labelKey, valueKey) {
+    const searchInput = document.getElementById(searchId);
+    const dropdown = document.getElementById(dropdownId);
+    const hiddenInput = document.getElementById(hiddenId);
+    
+    // Clear existing options
+    dropdown.innerHTML = '';
+    
+    if (items && items.length > 0) {
+        items.forEach(item => {
+            const option = document.createElement('div');
+            option.className = 'px-3 py-2 hover:bg-blue-50 cursor-pointer text-sm text-gray-700 border-b border-gray-100 last:border-b-0';
+            option.textContent = item[labelKey];
+            option.dataset.value = item[valueKey];
+            option.dataset.label = item[labelKey];
+            
+            option.addEventListener('click', () => {
+                searchInput.value = item[labelKey];
+                hiddenInput.value = item[valueKey];
+                dropdown.classList.add('hidden');
+                updateTripSummary(); // Update the trip summary when selection changes
+            });
+            
+            dropdown.appendChild(option);
+        });
+    } else {
+        const noDataText = searchId.includes('driver') ? 'No drivers available' : 'No vehicles available';
+        const option = document.createElement('div');
+        option.className = 'px-3 py-2 text-sm text-gray-500 italic';
+        option.textContent = noDataText;
+        dropdown.appendChild(option);
+    }
+}
+
+// Legacy function for backward compatibility (if needed elsewhere)
+function populateSelect(selectId, items, labelKey, valueKey) {
+    // This function is kept for backward compatibility but not used for the main dropdowns
+    console.log('populateSelect called for:', selectId);
+}
+
+// Handle form submission
+document.getElementById('tripForm').addEventListener('submit', async function(e) {
+    e.preventDefault();
+    
+    // Comprehensive validation
+    const validationResult = validateTripData();
+    if (!validationResult.isValid) {
+        alert(validationResult.message);
+        return;
+    }
+    
+    // Show loading indicator
+    showLoading('Creating Trip...');
+    
+    // Get selected orders from DOM
+    const selectedOrders = [];
+    allOrders.forEach(order => {
+        const checkbox = document.getElementById(`order_${order.id}`);
+        if (checkbox && checkbox.checked) {
+            const stopInput = document.getElementById(`stop_input_${order.id}`);
+            const stopNumberInput = stopInput ? stopInput.querySelector('input') : null;
+            const stopNumber = stopNumberInput ? parseInt(stopNumberInput.value) || 1 : 1;
+            
+            selectedOrders.push({
+                ...order,
+                stopNumber: stopNumber
+            });
+        }
+    });
+    
+    // Sort orders by stop number
+    const sortedOrders = [...selectedOrders].sort((a, b) => a.stopNumber - b.stopNumber);
+    
+    // Prepare trip data
+    const tripData = {
+        driver1_id: document.getElementById('driver1').value,
+        driver2_id: document.getElementById('driver2').value,
+        vehicle_id: parseInt(document.getElementById('vehicle').value),
+        delivery_date: document.getElementById('deliveryDate').value,
+        approximate_start_time: document.getElementById('startTime').value,
+        orders: sortedOrders.map(order => ({
+            order_id: order.id,
+            room_override: null,
+            customer_location: order.customer_location
+        }))
+    };
+    
+    try {
+        const response = await fetch('/trips/new', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify(tripData)
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            hideLoading();
+            showSuccessMessage('Trip created successfully!');
+            setTimeout(() => {
+                window.location.href = '/trips';
+            }, 2000);
+        } else {
+            hideLoading();
+            showErrorMessage(`Error creating trip: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error creating trip: ${error.message}`);
+    }
+});
+
+// Comprehensive validation function
+function validateTripData() {
+    // Get form values from hidden inputs
+    const driver1 = document.getElementById('driver1').value;
+    const driver2 = document.getElementById('driver2').value;
+    const vehicle = document.getElementById('vehicle').value;
+    const deliveryDate = document.getElementById('deliveryDate').value;
+    const startTime = document.getElementById('startTime').value;
+    
+    // Get selected orders
+    const selectedOrders = [];
+    allOrders.forEach(order => {
+        const checkbox = document.getElementById(`order_${order.id}`);
+        if (checkbox && checkbox.checked) {
+            const stopInput = document.getElementById(`stop_input_${order.id}`);
+            const stopNumberInput = stopInput ? stopInput.querySelector('input') : null;
+            const stopNumber = stopNumberInput ? parseInt(stopNumberInput.value) || 1 : 1;
+            
+            selectedOrders.push({
+                ...order,
+                stopNumber: stopNumber
+            });
+        }
+    });
+    
+    // Validation 1: Check if orders are selected
+    if (selectedOrders.length === 0) {
+        return {
+            isValid: false,
+            message: 'Please select at least one order for the trip.'
+        };
+    }
+    
+    // Validation 2: Check if resources are selected
+    if (!driver1 || !driver2 || !vehicle) {
+        return {
+            isValid: false,
+            message: 'Please select both drivers and a vehicle for the trip.'
+        };
+    }
+    
+    // Validation 3: Check if schedule is provided
+    if (!deliveryDate || !startTime) {
+        return {
+            isValid: false,
+            message: 'Please select both delivery date and start time for the trip.'
+        };
+    }
+    
+    // Validation 4: Check for duplicate drivers
+    if (driver1 === driver2) {
+        return {
+            isValid: false,
+            message: 'Please select different drivers for the trip.'
+        };
+    }
+    
+    // Validation 5: Check for sequential stop numbers with no duplicates
+    const stopNumbers = selectedOrders.map(order => order.stopNumber).sort((a, b) => a - b);
+    const expectedSequence = Array.from({length: stopNumbers.length}, (_, i) => i + 1);
+    
+    if (JSON.stringify(stopNumbers) !== JSON.stringify(expectedSequence)) {
+        return {
+            isValid: false,
+            message: 'Stop numbers must be sequential starting from 1 with no duplicates or gaps.'
+        };
+    }
+    
+    // Validation 6: Check delivery date consistency
+    const selectedDeliveryDates = selectedOrders.map(order => order.delivery_date).filter(date => date && date !== 'Not specified');
+    if (selectedDeliveryDates.length > 0) {
+        const uniqueDates = [...new Set(selectedDeliveryDates)];
+        if (uniqueDates.length > 1) {
+            return {
+                isValid: false,
+                message: 'All selected orders must have the same delivery date.'
+            };
+        }
+    }
+    
+    // All validations passed
+    return {
+        isValid: true,
+        message: 'Validation passed'
+    };
+}
+
+// Show success message
+function showSuccessMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.id = 'success-message';
+    messageDiv.className = 'fixed top-4 right-4 bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded z-50 flex items-center';
+    messageDiv.innerHTML = `
+        <svg class="h-5 w-5 text-green-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zm3.707-9.293a1 1 0 00-1.414-1.414L9 10.586 7.707 9.293a1 1 0 00-1.414 1.414l2 2a1 1 0 001.414 0l4-4z" clip-rule="evenodd" />
+        </svg>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(messageDiv);
+    
+    // Remove message after 3 seconds
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, 3000);
+}
+
+// Show error message
+function showErrorMessage(message) {
+    const messageDiv = document.createElement('div');
+    messageDiv.id = 'error-message';
+    messageDiv.className = 'fixed top-4 right-4 bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded z-50 flex items-center';
+    messageDiv.innerHTML = `
+        <svg class="h-5 w-5 text-red-500 mr-2" fill="currentColor" viewBox="0 0 20 20">
+            <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clip-rule="evenodd" />
+        </svg>
+        <span>${message}</span>
+    `;
+    document.body.appendChild(messageDiv);
+    
+    // Remove message after 5 seconds
+    setTimeout(() => {
+        if (messageDiv.parentNode) {
+            messageDiv.parentNode.removeChild(messageDiv);
+        }
+    }, 5000);
+}
+
+// Initialize page
+document.addEventListener('DOMContentLoaded', function() {
+    // Load resources (drivers and vehicles) on page load
+    loadResources();
+    
+    // Add cancel button event listener
+    document.getElementById('cancelButton').addEventListener('click', function() {
+        window.location.href = '{{ url_for("trips") }}';
+    });
+    
+    // Initialize searchable dropdowns
+    initializeSearchableDropdowns();
+    
+    // Add event listeners for schedule fields to update summary
+    document.getElementById('deliveryDate').addEventListener('change', updateTripSummary);
+    document.getElementById('startTime').addEventListener('change', updateTripSummary);
+});
+
+// Initialize searchable dropdown functionality
+function initializeSearchableDropdowns() {
+    const dropdowns = [
+        { searchId: 'driver1-search', dropdownId: 'driver1-dropdown', hiddenId: 'driver1' },
+        { searchId: 'driver2-search', dropdownId: 'driver2-dropdown', hiddenId: 'driver2' },
+        { searchId: 'vehicle-search', dropdownId: 'vehicle-dropdown', hiddenId: 'vehicle' }
+    ];
+    
+    dropdowns.forEach(({ searchId, dropdownId, hiddenId }) => {
+        const searchInput = document.getElementById(searchId);
+        const dropdown = document.getElementById(dropdownId);
+        
+        // Show dropdown on focus
+        searchInput.addEventListener('focus', () => {
+            dropdown.classList.remove('hidden');
+        });
+        
+        // Hide dropdown when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                dropdown.classList.add('hidden');
+            }
+        });
+        
+        // Real-time search filtering
+        searchInput.addEventListener('input', (e) => {
+            const searchTerm = e.target.value.toLowerCase();
+            const options = dropdown.querySelectorAll('[data-value]');
+            
+            options.forEach(option => {
+                const text = option.textContent.toLowerCase();
+                if (text.includes(searchTerm)) {
+                    option.style.display = 'block';
+                } else {
+                    option.style.display = 'none';
+                }
+            });
+            
+            // Show dropdown if there are visible options
+            const visibleOptions = Array.from(options).filter(opt => opt.style.display !== 'none');
+            if (visibleOptions.length > 0) {
+                dropdown.classList.remove('hidden');
+            }
+        });
+        
+        // Keyboard navigation
+        searchInput.addEventListener('keydown', (e) => {
+            const visibleOptions = Array.from(dropdown.querySelectorAll('[data-value]')).filter(opt => opt.style.display !== 'none');
+            const currentIndex = visibleOptions.findIndex(opt => opt.classList.contains('bg-blue-100'));
+            
+            switch(e.key) {
+                case 'ArrowDown':
+                    e.preventDefault();
+                    if (currentIndex < visibleOptions.length - 1) {
+                        visibleOptions.forEach(opt => opt.classList.remove('bg-blue-100'));
+                        visibleOptions[currentIndex + 1].classList.add('bg-blue-100');
+                    }
+                    break;
+                case 'ArrowUp':
+                    e.preventDefault();
+                    if (currentIndex > 0) {
+                        visibleOptions.forEach(opt => opt.classList.remove('bg-blue-100'));
+                        visibleOptions[currentIndex - 1].classList.add('bg-blue-100');
+                    }
+                    break;
+                case 'Enter':
+                    e.preventDefault();
+                    const selectedOption = visibleOptions.find(opt => opt.classList.contains('bg-blue-100'));
+                    if (selectedOption) {
+                        selectedOption.click();
+                    }
+                    break;
+                case 'Escape':
+                    dropdown.classList.add('hidden');
+                    searchInput.blur();
+                    break;
+            }
+        });
+    });
+}
+</script>
+{% endblock %} 

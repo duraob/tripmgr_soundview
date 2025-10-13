@@ -1,0 +1,272 @@
+{% extends "base.html" %}
+
+{% block title %}Help & User Guide - Trip Manager{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="max-w-4xl mx-auto">
+        <!-- Header -->
+        <div class="text-center mb-8">
+            <h1 class="text-3xl font-bold text-gray-900 mb-2">Help & User Guide</h1>
+            <p class="text-lg text-gray-600">Learn how to use the Affinity LeafTrade BioTrack system</p>
+        </div>
+
+        <!-- Quick Navigation -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-8">
+            <h2 class="text-lg font-semibold text-gray-900 mb-4">Quick Navigation</h2>
+            <div class="grid grid-cols-2 md:grid-cols-6 gap-3">
+                <a href="#configuration" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Configuration</a>
+                <a href="#mapping" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Mapping</a>
+                <a href="#contacts" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Contacts</a>
+                <a href="#new-trip" class="text-blue-600 hover:text-blue-800 text-sm font-medium">New Trip</a>
+                <a href="#trip-validation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Trip Validation</a>
+                <a href="#trip-execution" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Trip Execution</a>
+            </div>
+        </div>
+
+        <!-- Configuration Section -->
+        <div id="configuration" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-blue-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10.325 4.317c.426-1.756 2.924-1.756 3.35 0a1.724 1.724 0 002.573 1.066c1.543-.94 3.31.826 2.37 2.37a1.724 1.724 0 001.065 2.572c1.756.426 1.756 2.924 0 3.35a1.724 1.724 0 00-1.066 2.573c.94 1.543-.826 3.31-2.37 2.37a1.724 1.724 0 00-2.572 1.065c-.426 1.756-2.924 1.756-3.35 0a1.724 1.724 0 00-2.573-1.066c-1.543.94-3.31-.826-2.37-2.37a1.724 1.724 0 00-1.065-2.572c-1.756-.426-1.756-2.924 0-3.35a1.724 1.724 0 001.066-2.573c-.94-1.543.826-3.31 2.37-2.37.996.608 2.296.07 2.572-1.065z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Configuration</h2>
+            </div>
+            <p class="text-gray-700 mb-4">Before you start using the system, you need to set up your connections and load your data.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What to do:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• Go to the Config page to connect to BioTrack and LeafTrade</li>
+                    <li>• Click "Refresh Drivers" to load all available drivers from BioTrack</li>
+                    <li>• Click "Refresh Vehicles" to load all available vehicles from BioTrack</li>
+                    <li>• Make sure your API keys and connections are working properly</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">Why it matters:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• Without drivers and vehicles loaded, you can't create trips</li>
+                    <li>• The system needs to know what resources are available to assign</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Mapping Section -->
+        <div id="mapping" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-green-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17.657 16.657L13.414 20.9a1.998 1.998 0 01-2.827 0l-4.244-4.243a8 8 0 1111.314 0z"></path>
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 11a3 3 0 11-6 0 3 3 0 016 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Mapping</h2>
+            </div>
+            <p class="text-gray-700 mb-4">The Mapping page helps you connect customer locations between LeafTrade and BioTrack.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What to do:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• View the list of customer locations from both systems</li>
+                    <li>• Match LeafTrade locations with their BioTrack equivalents</li>
+                    <li>• Update any missing or incorrect mappings</li>
+                    <li>• This ensures orders go to the right places</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">Why it matters:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• Wrong location mappings mean drivers go to the wrong addresses</li>
+                    <li>• Accurate mapping prevents delivery mistakes</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Contacts Section -->
+        <div id="contacts" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-orange-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-orange-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Customer Contacts</h2>
+            </div>
+            <p class="text-gray-700 mb-4">Manage the people at dispensaries who will receive delivery notifications and documents.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What to do:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• Go to the Customer Contacts page to see all your contacts</li>
+                    <li>• Add new contacts by clicking "Add Contact" and filling out the form</li>
+                    <li>• Set email preferences for each contact (Invoice, Manifest, or Both)</li>
+                    <li>• Mark the main person at each dispensary as "Primary Contact"</li>
+                    <li>• Use search and filters to find contacts quickly</li>
+                    <li>• Export your contact list from the Configuration page</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-green-900 mb-2">Email Preferences:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• <strong>Invoice:</strong> Contact receives invoice documents</li>
+                    <li>• <strong>Manifest:</strong> Contact receives delivery manifest documents</li>
+                    <li>• <strong>Both:</strong> Contact receives both invoice and manifest</li>
+                    <li>• Each contact must have at least one preference selected</li>
+                </ul>
+            </div>
+            
+            <div class="bg-yellow-50 rounded-lg p-4">
+                <h3 class="font-medium text-yellow-900 mb-2">Sending Emails from Trips:</h3>
+                <ul class="text-yellow-800 space-y-1 text-sm">
+                    <li>• After a trip is completed, go to the trip details page</li>
+                    <li>• Click "Send Emails" to send documents to contacts</li>
+                    <li>• The system automatically sends to contacts based on their preferences</li>
+                    <li>• You'll see a summary of which emails were sent and to how many contacts</li>
+                    <li>• Internal contacts (from Configuration) are automatically CC'd on all emails</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- New Trip Section -->
+        <div id="new-trip" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-purple-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-purple-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 6v6m0 0v6m0-6h6m-6 0H6"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">New Trip</h2>
+            </div>
+            <p class="text-gray-700 mb-4">This is where you create delivery trips by combining orders, drivers, and vehicles.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What to do:</h3>
+                <ol class="text-blue-800 space-y-2 text-sm">
+                    <li><strong>1. Load Orders:</strong> Click "Load Orders" to see available orders from LeafTrade</li>
+                    <li><strong>2. Select Orders:</strong> Check the boxes for orders you want to deliver</li>
+                    <li><strong>3. Set Stop Numbers:</strong> Give each order a stop number (1, 2, 3, etc.) - must start at 1 with no gaps</li>
+                    <li><strong>4. Pick Drivers:</strong> Select two different drivers from the dropdowns</li>
+                    <li><strong>5. Pick Vehicle:</strong> Choose a vehicle for the trip</li>
+                    <li><strong>6. Set Schedule:</strong> Pick delivery date and start time</li>
+                    <li><strong>7. Review:</strong> Check the trip summary at the bottom</li>
+                    <li><strong>8. Create:</strong> Click "Create Trip" when everything looks right</li>
+                </ol>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">Why it matters:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• Stop numbers tell drivers the order to make deliveries</li>
+                    <li>• Two drivers are required for safety and efficiency</li>
+                    <li>• The system validates everything before creating the trip</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Trip Validation Section -->
+        <div id="trip-validation" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-yellow-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-yellow-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Trip Validation</h2>
+            </div>
+            <p class="text-gray-700 mb-4">The system checks your trip setup to make sure everything is correct.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What it checks:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• At least one order is selected</li>
+                    <li>• Two different drivers are picked</li>
+                    <li>• A vehicle is selected</li>
+                    <li>• Delivery date and start time are set</li>
+                    <li>• Stop numbers are sequential (1, 2, 3, no gaps)</li>
+                    <li>• All orders have the same delivery date</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">What happens if something's wrong:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• You'll see a red error message explaining the problem</li>
+                    <li>• The trip won't be created until you fix all issues</li>
+                    <li>• Common fixes are shown in the instructions</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Trip Execution Section -->
+        <div id="trip-execution" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-indigo-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-indigo-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Trip Execution</h2>
+            </div>
+            <p class="text-gray-700 mb-4">Once your trip is created, it's sent to BioTrack for driver assignment and execution.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">What happens next:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• The trip appears in your Trips list</li>
+                    <li>• BioTrack assigns the trip to your selected drivers</li>
+                    <li>• Drivers receive the route on their devices</li>
+                    <li>• You can track progress and make changes if needed</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4">
+                <h3 class="font-medium text-green-900 mb-2">Monitoring:</h3>
+                <ul class="text-green-800 space-y-1 text-sm">
+                    <li>• Check the Trips page to see all your created trips</li>
+                    <li>• View trip details to see the full route and order information</li>
+                    <li>• Update trip status as deliveries are completed</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Need Help Section -->
+        <div class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-red-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-red-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Need Help?</h2>
+            </div>
+            
+            <div class="bg-gray-50 rounded-lg p-4">
+                <ul class="text-gray-700 space-y-2 text-sm">
+                    <li>• Check the error messages - they usually tell you exactly what to fix</li>
+                    <li>• Make sure all required fields are filled out</li>
+                    <li>• Verify your BioTrack and LeafTrade connections are working</li>
+                    <li>• Contact support if you keep getting errors</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Back to Top Button -->
+        <div class="text-center">
+            <button onclick="window.scrollTo({top: 0, behavior: 'smooth'})" 
+                    class="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 10l7-7m0 0l7 7m-7-7v18"></path>
+                </svg>
+                Back to Top
+            </button>
+        </div>
+    </div>
+</div>
+{% endblock %}

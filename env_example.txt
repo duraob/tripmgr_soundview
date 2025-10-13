@@ -1,0 +1,32 @@
+# Flask Configuration
+SECRET_KEY=your-secret-key-here-change-in-production
+FLASK_ENV=development
+FLASK_DEBUG=True
+
+# Database Configuration
+DATABASE_URL=postgresql://username:password@localhost:5432/trip_manager
+# For development with SQLite (default)
+# DATABASE_URL=sqlite:///app.db
+
+# Supabase Configuration (if using Supabase)
+SUPABASE_URL=your-supabase-url
+SUPABASE_KEY=your-supabase-anon-key
+
+# API Keys
+OPENAI_API_KEY=your-openai-api-key
+
+# LeafTrade API Configuration
+LEAFTRADE_API_URL=your-leaftrade-api-url
+LEAFTRADE_API_KEY=your-leaftrade-api-key
+
+# BioTrack API Configuration
+BIOTRACK_API_URL=your-biotrack-api-url
+BIOTRACK_API_KEY=your-biotrack-api-key
+BIOTRACK_TRAINING_MODE=1  # Set to 1 for training, 0 for production
+
+# Email Configuration (for notifications)
+SMTP_SERVER=smtp.gmail.com
+SMTP_PORT=587
+SMTP_USERNAME=your-email@gmail.com
+SMTP_PASSWORD=your-app-password
+NOTIFICATION_EMAILS=admin@company.com,manager@company.com 

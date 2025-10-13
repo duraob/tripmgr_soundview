@@ -1,0 +1,67 @@
+{% extends "base.html" %}
+
+{% block title %}Add New User{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <div class="max-w-2xl mx-auto">
+        <div class="bg-white shadow overflow-hidden sm:rounded-lg">
+            <div class="px-4 py-5 sm:px-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900">Add New User</h3>
+            </div>
+            <div class="px-4 py-5 sm:p-6">
+                {% with messages = get_flashed_messages() %}
+                    {% if messages %}
+                        {% for message in messages %}
+                            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative mb-4" role="alert">
+                                <span class="block sm:inline">{{ message }}</span>
+                            </div>
+                        {% endfor %}
+                    {% endif %}
+                {% endwith %}
+
+                <form method="POST">
+                    <div class="mb-4">
+                        <label for="username" class="block text-sm font-medium text-gray-700">Username *</label>
+                        <input type="text" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                               id="username" name="username" value="{{ request.form.get('username', '') }}" required>
+                        <p class="mt-1 text-sm text-gray-500">Username must be unique and cannot be changed later.</p>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="email" class="block text-sm font-medium text-gray-700">Email *</label>
+                        <input type="email" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                               id="email" name="email" value="{{ request.form.get('email', '') }}" required>
+                    </div>
+
+                    <div class="mb-4">
+                        <label for="password" class="block text-sm font-medium text-gray-700">Password *</label>
+                        <input type="password" class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                               id="password" name="password" minlength="6" required>
+                        <p class="mt-1 text-sm text-gray-500">Password must be at least 6 characters long.</p>
+                    </div>
+
+                    <div class="mb-6">
+                        <label for="role" class="block text-sm font-medium text-gray-700">Role</label>
+                        <select class="mt-1 block w-full border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-sm" 
+                                id="role" name="role">
+                            <option value="user" {% if request.form.get('role') == 'user' %}selected{% endif %}>User</option>
+                            <option value="admin" {% if request.form.get('role') == 'admin' %}selected{% endif %}>Admin</option>
+                        </select>
+                        <p class="mt-1 text-sm text-gray-500">Admin users have full access to all features including user management.</p>
+                    </div>
+
+                    <div class="flex justify-between">
+                        <a href="{{ url_for('users') }}" class="bg-gray-500 hover:bg-gray-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-arrow-left mr-2"></i>Back to Users
+                        </a>
+                        <button type="submit" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded">
+                            <i class="fas fa-save mr-2"></i>Create User
+                        </button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+</div>
+{% endblock %} 

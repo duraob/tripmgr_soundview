@@ -1,0 +1,917 @@
+{% extends "base.html" %}
+
+{% block title %}Trip Details - Trip Manager{% endblock %}
+
+{% block content %}
+<div class="px-4 py-6 sm:px-0">
+    <!-- Trip Header -->
+    <div class="mb-8">
+        <div class="sm:flex sm:items-center sm:justify-between">
+            <div class="sm:flex-auto">
+                <h1 class="text-2xl font-semibold text-gray-900">Trip #{{ trip.id }}</h1>
+                <p class="mt-2 text-sm text-gray-700">
+                    Created on {{ trip.date_created.strftime('%Y-%m-%d %H:%M') }}
+                </p>
+            </div>
+            <div class="mt-4 sm:mt-0 sm:ml-16 sm:flex-none">
+                <a href="{{ url_for('trips') }}" 
+                   class="inline-flex items-center justify-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 shadow-sm hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto">
+                    Back to Trips
+                </a>
+                {% if trip.status == 'pending' %}
+                <button onclick="validateTrip({{ trip.id }})" 
+                        class="ml-3 inline-flex items-center justify-center rounded-md border border-transparent bg-yellow-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-yellow-700 focus:outline-none focus:ring-2 focus:ring-yellow-500 focus:ring-offset-2 sm:w-auto">
+                    Validate Trip
+                </button>
+                <button onclick="executeTrip({{ trip.id }})" 
+                        class="ml-3 inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:w-auto">
+                    Execute Trip
+                </button>
+                {% elif trip.status == 'validated' %}
+                <button onclick="executeTrip({{ trip.id }})" 
+                        class="ml-3 inline-flex items-center justify-center rounded-md border border-transparent bg-green-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-green-500 focus:ring-offset-2 sm:w-auto">
+                    Execute Trip
+                </button>
+                {% endif %}
+                {% if trip.status == 'completed' %}
+                <button onclick="sendBulkEmails({{ trip.id }})" 
+                        class="ml-3 inline-flex items-center justify-center rounded-md border border-transparent bg-blue-600 px-4 py-2 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2 sm:w-auto">
+                    Send Bulk Emails
+                </button>
+                {% endif %}
+            </div>
+        </div>
+        
+        <!-- Status and Resources -->
+        <div class="mt-6 grid grid-cols-1 gap-4 sm:grid-cols-3">
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Status</dt>
+                    <dd class="mt-1 text-3xl font-semibold text-gray-900">
+                        <div class="flex items-center space-x-3">
+                            <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium
+                                {% if trip.status == 'pending' %}bg-yellow-100 text-yellow-800
+                                {% elif trip.status == 'validated' %}bg-orange-100 text-orange-800
+                                {% elif trip.status == 'completed' %}bg-blue-100 text-blue-800
+                                {% else %}bg-gray-100 text-gray-800{% endif %}">
+                                {{ trip.status.title() }}
+                            </span>
+                            <button onclick="toggleTripStatus({{ trip.id }}, '{{ trip.status }}')" 
+                                    class="inline-flex items-center px-2 py-1 text-xs font-medium rounded-md border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                                Toggle Status
+                            </button>
+                        </div>
+                    </dd>
+                </div>
+            </div>
+            
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Drivers</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if trip.driver1 and trip.driver2 %}
+                            {{ trip.driver1.name }}, {{ trip.driver2.name }}
+                        {% elif trip.driver1 %}
+                            {{ trip.driver1.name }}
+                        {% elif trip.driver2 %}
+                            {{ trip.driver2.name }}
+                        {% else %}
+                            No drivers assigned
+                        {% endif %}
+                    </dd>
+                </div>
+            </div>
+            
+            <div class="bg-white overflow-hidden shadow rounded-lg">
+                <div class="px-4 py-5 sm:p-6">
+                    <dt class="text-sm font-medium text-gray-500 truncate">Vehicle</dt>
+                    <dd class="mt-1 text-sm text-gray-900">
+                        {% if trip.vehicle %}
+                            {{ trip.vehicle.name }}
+                        {% else %}
+                            No vehicle assigned
+                        {% endif %}
+                    </dd>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <!-- Route Summary -->
+    {% if trip.route_data %}
+    <div class="mb-8">
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-4 py-5 sm:p-6">
+                <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Route Summary</h3>
+                <div class="space-y-4">
+                    {% set route_segments = trip.route_data|from_json %}
+                    {% for segment in route_segments %}
+                    <div class="border border-gray-200 rounded-lg p-4">
+                        <div class="flex items-center justify-between mb-3">
+                            <h4 class="text-sm font-medium text-gray-900">Stop {{ loop.index }}</h4>
+                            <div class="text-xs text-gray-500">
+                                {% if segment.departure_time %}
+                                <div>Departure: {{ (segment.departure_time|int)|datetime_from_timestamp('%I:%M %p') }}</div>
+                                {% endif %}
+                                {% if segment.arrival_time %}
+                                <div>Arrival: {{ (segment.arrival_time|int)|datetime_from_timestamp('%I:%M %p') }}</div>
+                                {% endif %}
+                            </div>
+                        </div>
+                        {% if segment.route %}
+                        <div class="bg-gray-50 rounded-md p-3">
+                            <div class="text-sm text-gray-700 leading-relaxed whitespace-pre-line">{{ segment.route }}</div>
+                        </div>
+                        {% endif %}
+                    </div>
+                    {% endfor %}
+                </div>
+            </div>
+        </div>
+    </div>
+    {% endif %}
+    
+    <!-- Orders List -->
+    <div class="bg-white shadow rounded-lg">
+        <div class="px-4 py-5 sm:p-6">
+            <h3 class="text-lg leading-6 font-medium text-gray-900 mb-4">Orders ({{ trip.trip_orders|length }})</h3>
+            
+            <div class="space-y-4">
+                {% for trip_order in trip.trip_orders %}
+                <div class="border border-gray-200 rounded-lg">
+                    <div class="px-4 py-3 bg-gray-50 border-b border-gray-200">
+                        <div class="flex items-center justify-between">
+                            <div class="flex items-center space-x-3">
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                                    Stop {{ trip_order.sequence_order }}
+                                </span>
+                                <h4 class="text-sm font-medium text-gray-900">Order #{{ trip_order.order_id }}</h4>
+                                {% if trip_order.manifest_id %}
+                                <span class="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                                    Manifest: {{ trip_order.manifest_id }}
+                                </span>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Document Upload Section - Always Visible -->
+                    <div class="px-4 py-3 border-b border-gray-200 bg-gray-50">
+                        <h5 class="text-sm font-medium text-gray-900 mb-3">Documents</h5>
+                        
+                        <!-- Document Uploads - Side by Side -->
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <!-- Manifest Upload -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm text-gray-700">
+                                        Manifest: 
+                                        <span id="manifest-status-{{ trip_order.id }}" class="font-medium">
+                                            {% if trip_order.manifest_attached %}✅ Attached{% else %}❌ Not Attached{% endif %}
+                                        </span>
+                                    </label>
+                                    {% if trip_order.manifest_attached %}
+                                    <button onclick="deleteDocument({{ trip_order.id }}, 'manifest')" 
+                                            class="text-red-600 hover:text-red-900 text-xs">
+                                        Delete
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                <input type="file" 
+                                       id="manifest-file-{{ trip_order.id }}"
+                                       accept=".pdf" 
+                                       onchange="toggleUploadButton({{ trip_order.id }}, 'manifest')"
+                                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 mb-2">
+                                <button id="manifest-upload-btn-{{ trip_order.id }}" 
+                                        onclick="uploadDocument({{ trip_order.id }}, 'manifest')" 
+                                        class="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 hidden">
+                                    Upload Manifest
+                                </button>
+                            </div>
+                            
+                            <!-- Invoice Upload -->
+                            <div>
+                                <div class="flex items-center justify-between mb-2">
+                                    <label class="text-sm text-gray-700">
+                                        Invoice: 
+                                        <span id="invoice-status-{{ trip_order.id }}" class="font-medium">
+                                            {% if trip_order.invoice_attached %}✅ Attached{% else %}❌ Not Attached{% endif %}
+                                        </span>
+                                    </label>
+                                    {% if trip_order.invoice_attached %}
+                                    <button onclick="deleteDocument({{ trip_order.id }}, 'invoice')" 
+                                            class="text-red-600 hover:text-red-900 text-xs">
+                                        Delete
+                                    </button>
+                                    {% endif %}
+                                </div>
+                                <input type="file" 
+                                       id="invoice-file-{{ trip_order.id }}"
+                                       accept=".pdf" 
+                                       onchange="toggleUploadButton({{ trip_order.id }}, 'invoice')"
+                                       class="block w-full text-sm text-gray-500 file:mr-4 file:py-2 file:px-4 file:rounded-full file:border-0 file:text-sm file:font-semibold file:bg-blue-600 file:text-white hover:file:bg-blue-700 mb-2">
+                                <button id="invoice-upload-btn-{{ trip_order.id }}" 
+                                        onclick="uploadDocument({{ trip_order.id }}, 'invoice')" 
+                                        class="w-full inline-flex items-center justify-center px-3 py-2 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500 hidden">
+                                    Upload Invoice
+                                </button>
+                            </div>
+                        </div>
+                        
+                        <!-- Email Ready Status and Send Button -->
+                        <div class="pt-3 border-t border-gray-200">
+                            <div class="flex items-center justify-between">
+                                <div class="flex items-center space-x-2">
+                                    <span class="text-sm text-gray-700">Email Ready:</span>
+                                    <span id="email-ready-status-{{ trip_order.id }}" class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium
+                                        {% if trip_order.email_ready %}bg-green-100 text-green-800{% else %}bg-gray-100 text-gray-800{% endif %}">
+                                        {% if trip_order.email_ready %}✅ Ready{% else %}❌ Not Ready{% endif %}
+                                    </span>
+                                </div>
+                                {% if trip_order.email_ready %}
+                                <button onclick="sendEmail({{ trip_order.id }})" 
+                                        class="inline-flex items-center px-3 py-1 border border-transparent text-xs font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500">
+                                    Send Email
+                                </button>
+                                {% endif %}
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- Order Details - Always Visible -->
+                    <div class="px-4 py-3">
+                        <div class="grid grid-cols-1 md:grid-cols-2 gap-4 mb-4">
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-900 mb-2">Order Information</h5>
+                                <dl class="text-sm text-gray-600 space-y-1">
+                                    {% if trip_order.order and trip_order.order.invoice_id %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Invoice ID:</dt>
+                                        <dd>{{ trip_order.order.invoice_id }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if trip_order.order and trip_order.order.status %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Status:</dt>
+                                        <dd>{{ trip_order.order.status }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if trip_order.order and trip_order.order.delivery_date %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Delivery Date:</dt>
+                                        <dd>{{ trip_order.order.delivery_date }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if trip_order.order and trip_order.order.total_gross %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Total Amount:</dt>
+                                        <dd>${{ "%.2f"|format(trip_order.order.total_gross|float) }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Order ID:</dt>
+                                        <dd class="font-mono">{{ trip_order.order_id }}</dd>
+                                    </div>
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Sequence:</dt>
+                                        <dd>Stop {{ trip_order.sequence_order }}</dd>
+                                    </div>
+                                </dl>
+                            </div>
+                            <div>
+                                <h5 class="text-sm font-medium text-gray-900 mb-2">Trip Order Details</h5>
+                                <dl class="text-sm text-gray-600 space-y-1">
+                                    {% if trip_order.address %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Address:</dt>
+                                        <dd>{{ trip_order.address }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if trip_order.room_override %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Room Override:</dt>
+                                        <dd>{{ trip_order.room_override }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% if trip_order.manifest_id %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Manifest ID:</dt>
+                                        <dd class="font-mono text-green-700">{{ trip_order.manifest_id }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Created:</dt>
+                                        <dd>{{ trip_order.created_at.strftime('%Y-%m-%d %H:%M') if trip_order.created_at else 'N/A' }}</dd>
+                                    </div>
+                                    {% if trip_order.vendor %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">Vendor:</dt>
+                                        <dd>{{ trip_order.vendor.name }}</dd>
+                                    </div>
+                                    {% if trip_order.vendor.license_info %}
+                                    <div class="flex">
+                                        <dt class="font-medium w-24">License:</dt>
+                                        <dd>{{ trip_order.vendor.license_info }}</dd>
+                                    </div>
+                                    {% endif %}
+                                    {% endif %}
+
+                                </dl>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                {% endfor %}
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+async function executeTrip(tripId) {
+    if (!confirm('Are you sure you want to execute this trip? This will create manifests and send notifications.')) {
+        return;
+    }
+    
+    // Show loading indicator
+    showLoading('Executing Trip...');
+    
+    try {
+        const response = await fetch(`/trips/${tripId}/execute`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            hideLoading();
+            
+            // Show detailed results if available
+            if (result.manifest_results && result.manifest_results.length > 0) {
+                showDetailedResults(result);
+            } else {
+                showSuccessMessage(result.message || 'Trip execution completed successfully!');
+                setTimeout(() => {
+                    location.reload();
+                }, 2000);
+            }
+        } else {
+            hideLoading();
+            showDetailedResults(result);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error executing trip: ${error.message}`);
+    }
+}
+
+async function validateTrip(tripId) {
+    if (!confirm('Are you sure you want to validate this trip? This will check all orders and configurations.')) {
+        return;
+    }
+    
+    // Show loading indicator
+    showLoading('Validating Trip...');
+    
+    try {
+        const response = await fetch(`/api/trips/${tripId}/validate`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            }
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            showValidationResults(result);
+        } else {
+            showValidationResults(result);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error validating trip: ${error.message}`);
+    }
+}
+
+function showValidationResults(result) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.id = 'validation-results-modal';
+    
+    let statusIcon, statusClass, statusText;
+    if (result.valid) {
+        statusIcon = '✅';
+        statusClass = 'text-green-600';
+        statusText = 'Validation Successful';
+    } else {
+        statusIcon = '❌';
+        statusClass = 'text-red-600';
+        statusText = 'Validation Failed';
+    }
+    
+    modal.innerHTML = `
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Trip Validation Results</h3>
+                    <button onclick="closeValidationResultsModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center ${statusClass}">
+                        <span class="text-2xl mr-2">${statusIcon}</span>
+                        <span class="font-semibold">${statusText}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">${result.message || result.error || ''}</p>
+                </div>
+                
+                ${result.errors && result.errors.length > 0 ? `
+                    <div class="mb-4">
+                        <h4 class="font-medium text-red-700 mb-2">❌ Validation Errors (${result.errors.length})</h4>
+                        <div class="bg-red-50 border border-red-200 rounded-md p-3 max-h-32 overflow-y-auto">
+                            ${result.errors.map(error => `
+                                <div class="text-sm text-red-800 mb-1">
+                                    • ${error}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="flex justify-end space-x-3">
+                    <button onclick="closeValidationResultsModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                        Close
+                    </button>
+                    <button onclick="closeValidationResultsModal(); location.reload();" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Refresh Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeValidationResultsModal() {
+    const modal = document.getElementById('validation-results-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+function showDetailedResults(result) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.id = 'results-modal';
+    
+    const successfulOrders = result.manifest_results ? result.manifest_results.filter(r => r.status === 'success') : [];
+    const failedOrders = result.manifest_results ? result.manifest_results.filter(r => r.status === 'failed') : [];
+    
+    let statusIcon, statusClass, statusText;
+    if (result.success) {
+        if (failedOrders.length > 0) {
+            statusIcon = '⚠️';
+            statusClass = 'text-yellow-600';
+            statusText = 'Partially Completed';
+        } else {
+            statusIcon = '✅';
+            statusClass = 'text-green-600';
+            statusText = 'Completed Successfully';
+        }
+    } else {
+        statusIcon = '❌';
+        statusClass = 'text-red-600';
+        statusText = 'Failed';
+    }
+    
+    modal.innerHTML = `
+        <div class="relative top-20 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-1/2 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Trip Execution Results</h3>
+                    <button onclick="closeResultsModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="mb-4">
+                    <div class="flex items-center ${statusClass}">
+                        <span class="text-2xl mr-2">${statusIcon}</span>
+                        <span class="font-semibold">${statusText}</span>
+                    </div>
+                    <p class="text-sm text-gray-600 mt-1">${result.message || result.error || ''}</p>
+                </div>
+                
+                ${successfulOrders.length > 0 ? `
+                    <div class="mb-4">
+                        <h4 class="font-medium text-green-700 mb-2">✅ Successful Orders (${successfulOrders.length})</h4>
+                        <div class="bg-green-50 border border-green-200 rounded-md p-3 max-h-32 overflow-y-auto">
+                            ${successfulOrders.map(order => `
+                                <div class="text-sm text-green-800 mb-1">
+                                    Order ${order.order_id}${order.manifest_id ? ` - Manifest: ${order.manifest_id}` : ''}
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                ${failedOrders.length > 0 ? `
+                    <div class="mb-4">
+                        <h4 class="font-medium text-red-700 mb-2">❌ Failed Orders (${failedOrders.length})</h4>
+                        <div class="bg-red-50 border border-red-200 rounded-md p-3 max-h-32 overflow-y-auto">
+                            ${failedOrders.map(order => `
+                                <div class="text-sm text-red-800 mb-2">
+                                    <div class="font-medium">Order ${order.order_id}</div>
+                                    <div class="text-xs text-red-600">${order.error}</div>
+                                    ${order.error && order.error.includes('BioTrack Error') ? 
+                                        '<div class="text-xs text-red-500 mt-1 italic">Check BioTrack logs for detailed error information</div>' : 
+                                        ''
+                                    }
+                                </div>
+                            `).join('')}
+                        </div>
+                    </div>
+                ` : ''}
+                
+                <div class="flex justify-end space-x-3">
+                    ${failedOrders.length > 0 ? `
+                        <button onclick="viewErrorLogs()" class="px-4 py-2 bg-yellow-500 text-white rounded-md hover:bg-yellow-600">
+                            View Error Logs
+                        </button>
+                    ` : ''}
+                    <button onclick="closeResultsModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                        Close
+                    </button>
+                    <button onclick="closeResultsModal(); location.reload();" class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700">
+                        Refresh Page
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeResultsModal() {
+    const modal = document.getElementById('results-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+async function viewErrorLogs() {
+    try {
+        const response = await fetch('/api/error-logs');
+        const data = await response.json();
+        
+        if (data.success && data.logs) {
+            showErrorLogsModal(data.logs);
+        } else {
+            alert('No recent error logs found');
+        }
+    } catch (error) {
+        console.error('Error fetching logs:', error);
+        alert('Failed to fetch error logs');
+    }
+}
+
+function showErrorLogsModal(logs) {
+    const modal = document.createElement('div');
+    modal.className = 'fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full z-50';
+    modal.id = 'error-logs-modal';
+    
+    modal.innerHTML = `
+        <div class="relative top-10 mx-auto p-5 border w-11/12 md:w-3/4 lg:w-2/3 shadow-lg rounded-md bg-white">
+            <div class="mt-3">
+                <div class="flex items-center justify-between mb-4">
+                    <h3 class="text-lg font-medium text-gray-900">Recent BioTrack Error Logs</h3>
+                    <button onclick="closeErrorLogsModal()" class="text-gray-400 hover:text-gray-600">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
+                </div>
+                
+                <div class="bg-gray-50 border border-gray-200 rounded-md p-3 max-h-96 overflow-y-auto">
+                    ${logs.map(log => `
+                        <div class="text-sm text-gray-800 mb-3 p-2 bg-white border-l-4 border-red-500">
+                            <div class="font-medium text-red-700">${log.timestamp}</div>
+                            <div class="text-xs text-gray-600">${log.logger} - ${log.function}</div>
+                            <div class="text-sm text-gray-800 mt-1">${log.message}</div>
+                        </div>
+                    `).join('')}
+                </div>
+                
+                <div class="flex justify-end mt-4">
+                    <button onclick="closeErrorLogsModal()" class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400">
+                        Close
+                    </button>
+                </div>
+            </div>
+        </div>
+    `;
+    
+    document.body.appendChild(modal);
+}
+
+function closeErrorLogsModal() {
+    const modal = document.getElementById('error-logs-modal');
+    if (modal) {
+        modal.remove();
+    }
+}
+
+function showSuccessMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-green-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+function showErrorMessage(message) {
+    const toast = document.createElement('div');
+    toast.className = 'fixed top-4 right-4 bg-red-500 text-white px-6 py-3 rounded-lg shadow-lg z-50';
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        toast.remove();
+    }, 3000);
+}
+
+
+
+async function toggleTripStatus(tripId, currentStatus) {
+    let newStatus;
+    if (currentStatus === 'pending') {
+        newStatus = 'validated';
+    } else if (currentStatus === 'validated') {
+        newStatus = 'completed';
+    } else {
+        newStatus = 'pending';
+    }
+    
+    if (!confirm(`Are you sure you want to change the trip status from ${currentStatus} to ${newStatus}?`)) {
+        return;
+    }
+    
+    showLoading('Updating Trip Status...');
+    
+    try {
+        const response = await fetch(`/trips/${tripId}/toggle-status`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                new_status: newStatus
+            })
+        });
+        
+        const result = await response.json();
+        
+        if (result.success) {
+            hideLoading();
+            showSuccessMessage(`Trip status updated to ${newStatus}!`);
+            setTimeout(() => {
+                location.reload(); // Refresh the page to show updated status
+            }, 2000);
+        } else {
+            hideLoading();
+            showErrorMessage(`Error updating trip status: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error updating trip status: ${error.message}`);
+    }
+}
+
+// Document Upload and Email Functions
+async function uploadDocument(tripOrderId, documentType) {
+    const fileInput = document.getElementById(`${documentType}-file-${tripOrderId}`);
+    const file = fileInput.files[0];
+    
+    if (!file) {
+        showErrorMessage('Please select a file to upload');
+        return;
+    }
+    
+    if (file.type !== 'application/pdf') {
+        showErrorMessage('Please select a PDF file');
+        return;
+    }
+    
+    showLoading(`Uploading ${documentType}...`);
+    
+    try {
+        const formData = new FormData();
+        formData.append('document', file);
+        formData.append('document_type', documentType);
+        
+        const response = await fetch(`/api/trip-orders/${tripOrderId}/documents`, {
+            method: 'POST',
+            body: formData
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            showSuccessMessage(`${documentType} uploaded successfully!`);
+            updateDocumentStatus(tripOrderId, documentType, true);
+            checkEmailReadyStatus(tripOrderId);
+            // Clear the file input and hide upload button
+            fileInput.value = '';
+            const uploadButton = document.getElementById(`${documentType}-upload-btn-${tripOrderId}`);
+            if (uploadButton) {
+                uploadButton.classList.add('hidden');
+            }
+        } else {
+            showErrorMessage(`Error uploading ${documentType}: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error uploading ${documentType}: ${error.message}`);
+    }
+}
+
+async function deleteDocument(tripOrderId, documentType) {
+    if (!confirm(`Are you sure you want to delete the ${documentType}?`)) {
+        return;
+    }
+    
+    showLoading(`Deleting ${documentType}...`);
+    
+    try {
+        const response = await fetch(`/api/trip-orders/${tripOrderId}/documents/${documentType}`, {
+            method: 'DELETE'
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            showSuccessMessage(`${documentType} deleted successfully!`);
+            updateDocumentStatus(tripOrderId, documentType, false);
+            checkEmailReadyStatus(tripOrderId);
+        } else {
+            showErrorMessage(`Error deleting ${documentType}: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error deleting ${documentType}: ${error.message}`);
+    }
+}
+
+async function sendEmail(tripOrderId) {
+    if (!confirm('Are you sure you want to send the email for this order?')) {
+        return;
+    }
+    
+    showLoading('Sending email...');
+    
+    try {
+        const response = await fetch(`/api/trip-orders/${tripOrderId}/send-email`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            showSuccessMessage('Email sent successfully!');
+        } else {
+            showErrorMessage(`Error sending email: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error sending email: ${error.message}`);
+    }
+}
+
+async function sendBulkEmails(tripId) {
+    if (!confirm('Are you sure you want to send emails for all ready orders in this trip?')) {
+        return;
+    }
+    
+    showLoading('Sending bulk emails...');
+    
+    try {
+        const response = await fetch(`/api/trips/${tripId}/send-bulk-emails`, {
+            method: 'POST'
+        });
+        
+        const result = await response.json();
+        
+        hideLoading();
+        
+        if (result.success) {
+            const successCount = result.results.filter(r => r.success).length;
+            const totalCount = result.results.length;
+            showSuccessMessage(`Bulk email completed: ${successCount}/${totalCount} emails sent successfully!`);
+        } else {
+            showErrorMessage(`Error sending bulk emails: ${result.error}`);
+        }
+        
+    } catch (error) {
+        hideLoading();
+        showErrorMessage(`Error sending bulk emails: ${error.message}`);
+    }
+}
+
+function updateDocumentStatus(tripOrderId, documentType, isAttached) {
+    const statusElement = document.getElementById(`${documentType}-status-${tripOrderId}`);
+    if (statusElement) {
+        statusElement.textContent = isAttached ? '✅ Attached' : '❌ Not Attached';
+    }
+    
+    // Update delete button visibility
+    const deleteButton = statusElement?.parentElement?.querySelector('button');
+    if (deleteButton) {
+        deleteButton.style.display = isAttached ? 'inline' : 'none';
+    }
+}
+
+function checkEmailReadyStatus(tripOrderId) {
+    const manifestStatus = document.getElementById(`manifest-status-${tripOrderId}`)?.textContent;
+    const invoiceStatus = document.getElementById(`invoice-status-${tripOrderId}`)?.textContent;
+    
+    const manifestAttached = manifestStatus?.includes('✅');
+    const invoiceAttached = invoiceStatus?.includes('✅');
+    
+    const emailReadyStatus = document.getElementById(`email-ready-status-${tripOrderId}`);
+    const sendEmailButton = emailReadyStatus?.parentElement?.querySelector('button');
+    
+    if (manifestAttached && invoiceAttached) {
+        // Both documents attached - ready for email
+        if (emailReadyStatus) {
+            emailReadyStatus.textContent = '✅ Ready';
+            emailReadyStatus.className = 'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800';
+        }
+        if (sendEmailButton) {
+            sendEmailButton.style.display = 'inline-flex';
+        }
+    } else {
+        // Not ready for email
+        if (emailReadyStatus) {
+            emailReadyStatus.textContent = '❌ Not Ready';
+            emailReadyStatus.className = 'inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-gray-100 text-gray-800';
+        }
+        if (sendEmailButton) {
+            sendEmailButton.style.display = 'none';
+        }
+    }
+}
+
+function toggleUploadButton(tripOrderId, documentType) {
+    const fileInput = document.getElementById(`${documentType}-file-${tripOrderId}`);
+    const uploadButton = document.getElementById(`${documentType}-upload-btn-${tripOrderId}`);
+
+    if (fileInput.files.length > 0) {
+        uploadButton.classList.remove('hidden');
+    } else {
+        uploadButton.classList.add('hidden');
+    }
+}
+
+// Initialize upload button states when page loads
+function initializeUploadButtons() {
+    const fileInputs = document.querySelectorAll('input[type="file"]');
+    fileInputs.forEach(input => {
+        const tripOrderId = input.id.split('-')[2];
+        const documentType = input.id.split('-')[0];
+        toggleUploadButton(tripOrderId, documentType);
+    });
+}
+
+// Initialize when page is ready
+document.addEventListener('DOMContentLoaded', initializeUploadButtons);
+</script>
+{% endblock %} 

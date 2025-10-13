@@ -1,0 +1,715 @@
+{% extends "base.html" %}
+
+{% block title %}Configuration - BioTrack-LeafTrade Middleware{% endblock %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Header -->
+        <div class="mb-8">
+            <h1 class="text-3xl font-bold text-gray-900">Configuration</h1>
+            <p class="mt-2 text-gray-600">Manage API data synchronization and system settings</p>
+        </div>
+
+        <!-- API Data Management -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">API Data Management</h2>
+                <p class="text-sm text-gray-600 mt-1">Refresh cached data from external APIs</p>
+            </div>
+            
+            <div class="p-6 space-y-6">
+                <!-- Drivers Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Drivers (BioTrack)</h3>
+                            <p class="text-sm text-gray-600">Manage driver data from BioTrack API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="drivers-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <button id="refresh-drivers" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Refresh Drivers
+                        </button>
+                    </div>
+                    <div id="drivers-result" class="mt-3 hidden">
+                        <div class="text-sm p-3 rounded-md"></div>
+                    </div>
+                </div>
+
+                <!-- Vehicles Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Vehicles (BioTrack)</h3>
+                            <p class="text-sm text-gray-600">Manage vehicle data from BioTrack API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="vehicles-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <button id="refresh-vehicles" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Refresh Vehicles
+                        </button>
+                    </div>
+                    <div id="vehicles-result" class="mt-3 hidden">
+                        <div class="text-sm p-3 rounded-md"></div>
+                    </div>
+                </div>
+
+                <!-- Orders Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Orders (LeafTrade)</h3>
+                            <p class="text-sm text-gray-600">Orders are fetched on-demand from LeafTrade API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="orders-status">Real-time fetching</span>
+                            </div>
+                        </div>
+                        <button disabled class="bg-gray-300 text-gray-500 px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed">
+                            Auto-fetch
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Rooms Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Rooms (BioTrack)</h3>
+                            <p class="text-sm text-gray-600">Manage room data from BioTrack API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="rooms-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <button id="refresh-rooms" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Refresh Rooms
+                        </button>
+                    </div>
+                    <div id="rooms-result" class="mt-3 hidden">
+                        <div class="text-sm p-3 rounded-md"></div>
+                    </div>
+                </div>
+
+                <!-- Vendors Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Vendors (BioTrack)</h3>
+                            <p class="text-sm text-gray-600">Manage vendor data from BioTrack API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="vendors-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="refresh-vendors" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                Refresh Vendors
+                            </button>
+                            <button onclick="exportData('vendors')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div id="vendors-result" class="mt-3 hidden">
+                        <div class="text-sm p-3 rounded-md"></div>
+                    </div>
+                </div>
+
+                <!-- Customers Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Customers (LeafTrade)</h3>
+                            <p class="text-sm text-gray-600">Manage customer location data from LeafTrade API</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="customers-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <div class="flex space-x-2">
+                            <button id="refresh-customers" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                Refresh Customers
+                            </button>
+                            <button onclick="exportData('customers')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                Export CSV
+                            </button>
+                        </div>
+                    </div>
+                    <div id="customers-result" class="mt-3 hidden">
+                        <div class="text-sm p-3 rounded-md"></div>
+                    </div>
+                </div>
+
+                <!-- Contacts Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Customer Contacts</h3>
+                            <p class="text-sm text-gray-600">Manage customer contact information for email delivery</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="contacts-status">Loading status...</span>
+                            </div>
+                        </div>
+                        <button onclick="exportData('contacts')" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Export CSV
+                        </button>
+                    </div>
+                </div>
+
+                <!-- Internal Contacts Section -->
+                <div class="border border-gray-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between">
+                        <div>
+                            <h3 class="text-lg font-medium text-gray-900">Internal Contacts</h3>
+                            <p class="text-sm text-gray-600">Manage internal contacts that will be CC'd on all outgoing emails</p>
+                            <div class="mt-2 text-sm text-gray-500">
+                                <span id="internal-contacts-count">0 contacts</span>
+                            </div>
+                        </div>
+                        <button onclick="showAddInternalContactModal()" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                            Add Contact
+                        </button>
+                    </div>
+                    
+                    <!-- Internal Contacts Table -->
+                    <div class="mt-4">
+                        <div class="overflow-x-auto">
+                            <table class="min-w-full divide-y divide-gray-200">
+                                <thead class="bg-gray-50">
+                                    <tr>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Name</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Email</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Status</th>
+                                        <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                    </tr>
+                                </thead>
+                                <tbody id="internal-contacts-table" class="bg-white divide-y divide-gray-200">
+                                    <!-- Internal contacts will be loaded here -->
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Training Mode Status -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">BioTrack Training Mode</h2>
+                <p class="text-sm text-gray-600 mt-1">Current training mode status and configuration</p>
+            </div>
+            
+            <div class="p-6">
+                <div class="flex items-center justify-between">
+                    <div>
+                        <p class="text-sm text-gray-600">
+                            Current Mode: 
+                            <span class="font-medium {% if is_training_mode %}text-yellow-600{% else %}text-red-600{% endif %}">
+                                {% if is_training_mode %}Training{% else %}Production{% endif %}
+                            </span>
+                        </p>
+                        <p class="text-xs text-gray-500 mt-1">
+                            Environment Variable: BIOTRACK_TRAINING_MODE={{ training_mode }}
+                        </p>
+                    </div>
+                    <div class="text-right">
+                        <p class="text-xs text-gray-500">
+                            To change mode, update the BIOTRACK_TRAINING_MODE<br>
+                            environment variable and restart the application.
+                        </p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- BioTrack Data Refresh -->
+        <div class="bg-white shadow rounded-lg mb-8">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">BioTrack Data Management</h2>
+                <p class="text-sm text-gray-600 mt-1">Manage BioTrack data with current training mode</p>
+            </div>
+            
+            <div class="p-6">
+                <p class="text-sm text-gray-600 mb-4">
+                    Current training mode: <span class="font-medium {% if is_training_mode %}text-yellow-600{% else %}text-red-600{% endif %}">
+                        {% if is_training_mode %}Training{% else %}Production{% endif %}
+                    </span>
+                </p>
+                <button onclick="refreshBiotrackData()" class="bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium">
+                    Refresh BioTrack Data
+                </button>
+                <p class="text-xs text-gray-500 mt-2">
+                    This will clear existing data and refresh from BioTrack using the current training mode.
+                </p>
+            </div>
+        </div>
+
+        <!-- System Information -->
+        <div class="bg-white shadow rounded-lg">
+            <div class="px-6 py-4 border-b border-gray-200">
+                <h2 class="text-xl font-semibold text-gray-900">System Information</h2>
+                <p class="text-sm text-gray-600 mt-1">Current system status and configuration</p>
+            </div>
+            
+            <div class="p-6">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-3">Database Status</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Database Type:</span>
+                                <span class="font-medium">PostgreSQL</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">Migration Status:</span>
+                                <span class="font-medium text-green-600">Up to date</span>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <div>
+                        <h3 class="text-lg font-medium text-gray-900 mb-3">API Connections</h3>
+                        <div class="space-y-2 text-sm">
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">BioTrack API:</span>
+                                <span id="biotrack-status" class="font-medium text-gray-500">Manual Check Required</span>
+                            </div>
+                            <div class="flex justify-between">
+                                <span class="text-gray-600">LeafTrade API:</span>
+                                <span id="leaftrade-status" class="font-medium text-gray-500">Manual Check Required</span>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- Internal Contact Modal -->
+<div id="internalContactModal" class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <h3 class="text-lg font-medium text-gray-900 mb-4" id="modalTitle">Add Internal Contact</h3>
+            <form id="internalContactForm">
+                <div class="mb-4">
+                    <label for="contactName" class="block text-sm font-medium text-gray-700">Name</label>
+                    <input type="text" id="contactName" name="name" required 
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label for="contactEmail" class="block text-sm font-medium text-gray-700">Email</label>
+                    <input type="email" id="contactEmail" name="email" required 
+                           class="mt-1 block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-blue-500 focus:border-blue-500">
+                </div>
+                <div class="mb-4">
+                    <label class="flex items-center">
+                        <input type="checkbox" id="contactActive" name="is_active" checked 
+                               class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
+                        <span class="ml-2 text-sm text-gray-700">Active</span>
+                    </label>
+                </div>
+                <div class="flex justify-end space-x-3">
+                    <button type="button" onclick="hideInternalContactModal()" 
+                            class="px-4 py-2 bg-gray-300 text-gray-700 rounded-md hover:bg-gray-400 focus:outline-none focus:ring-2 focus:ring-gray-500">
+                        Cancel
+                    </button>
+                    <button type="submit" 
+                            class="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        Save
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    // Load initial status
+    loadStatus();
+    
+    // Set up refresh buttons
+    document.getElementById('refresh-drivers').addEventListener('click', function() {
+        refreshData('drivers');
+    });
+    
+    document.getElementById('refresh-vehicles').addEventListener('click', function() {
+        refreshData('vehicles');
+    });
+    
+    document.getElementById('refresh-rooms').addEventListener('click', function() {
+        refreshData('rooms');
+    });
+    
+    document.getElementById('refresh-vendors').addEventListener('click', function() {
+        refreshData('vendors');
+    });
+    
+    document.getElementById('refresh-customers').addEventListener('click', function() {
+        refreshData('customers');
+    });
+});
+
+function refreshBiotrackData() {
+    const button = event.target;
+    const originalText = button.textContent;
+    
+    // Disable button and show loading
+    button.disabled = true;
+    button.textContent = 'Refreshing...';
+    button.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+    
+    // Show confirmation dialog
+    if (!confirm('This will clear all existing BioTrack data and refresh from the current training mode environment. Continue?')) {
+        // Re-enable button if cancelled
+        button.disabled = false;
+        button.textContent = originalText;
+        button.className = 'bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium';
+        return;
+    }
+    
+    // Make API call to refresh all BioTrack data
+    fetch('/api/biotrack/refresh', {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            alert('BioTrack data refreshed successfully!');
+            // Reload status
+            loadStatus();
+        } else {
+            alert('Error refreshing BioTrack data: ' + (data.error || 'Unknown error'));
+        }
+    })
+    .catch(error => {
+        alert('Network error occurred while refreshing BioTrack data');
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        button.textContent = originalText;
+        button.className = 'bg-blue-500 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium';
+    });
+}
+
+function loadStatus() {
+    // Load drivers status
+    fetch('/api/drivers')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('drivers-status');
+            if (data.drivers) {
+                statusElement.textContent = `${data.drivers.length} drivers cached`;
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                statusElement.textContent = 'No drivers cached';
+                statusElement.className = 'text-sm text-yellow-600';
+            }
+        })
+        .catch(error => {
+            document.getElementById('drivers-status').textContent = 'Error loading status';
+            document.getElementById('drivers-status').className = 'text-sm text-red-600';
+        });
+    
+    // Load vehicles status
+    fetch('/api/vehicles')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('vehicles-status');
+            if (data.vehicles) {
+                statusElement.textContent = `${data.vehicles.length} vehicles cached`;
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                statusElement.textContent = 'No vehicles cached';
+                statusElement.className = 'text-sm text-yellow-600';
+            }
+        })
+        .catch(error => {
+            document.getElementById('vehicles-status').textContent = 'Error loading status';
+            document.getElementById('vehicles-status').className = 'text-sm text-red-600';
+        });
+    
+    // Load rooms status
+    fetch('/api/rooms')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('rooms-status');
+            if (data.rooms) {
+                statusElement.textContent = `${data.rooms.length} rooms cached`;
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                statusElement.textContent = 'No rooms cached';
+                statusElement.className = 'text-sm text-yellow-600';
+            }
+        })
+        .catch(error => {
+            document.getElementById('rooms-status').textContent = 'Error loading status';
+            document.getElementById('rooms-status').className = 'text-sm text-red-600';
+        });
+    
+    // Load vendors status
+    fetch('/api/vendors')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('vendors-status');
+            if (data.vendors) {
+                statusElement.textContent = `${data.vendors.length} vendors cached`;
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                statusElement.textContent = 'No vendors cached';
+                statusElement.className = 'text-sm text-yellow-600';
+            }
+        })
+        .catch(error => {
+            document.getElementById('vendors-status').textContent = 'Error loading status';
+            document.getElementById('vendors-status').className = 'text-sm text-red-600';
+        });
+    
+    // Load customers status
+    fetch('/api/customers')
+        .then(response => response.json())
+        .then(data => {
+            const statusElement = document.getElementById('customers-status');
+            if (data.customers) {
+                statusElement.textContent = `${data.customers.length} customers cached`;
+                statusElement.className = 'text-sm text-green-600';
+            } else {
+                statusElement.textContent = 'No customers cached';
+                statusElement.className = 'text-sm text-yellow-600';
+            }
+        })
+        .catch(error => {
+            document.getElementById('customers-status').textContent = 'Error loading status';
+            document.getElementById('customers-status').className = 'text-sm text-red-600';
+        });
+    
+    // Note: API connections are checked manually via refresh buttons
+    // No automatic API calls are made
+}
+
+function refreshData(type) {
+    const button = document.getElementById(`refresh-${type}`);
+    const resultDiv = document.getElementById(`${type}-result`);
+    const resultContent = resultDiv.querySelector('div');
+    
+    // Disable button and show loading
+    button.disabled = true;
+    button.textContent = 'Refreshing...';
+    button.className = 'bg-gray-400 text-white px-4 py-2 rounded-md text-sm font-medium cursor-not-allowed';
+    
+    // Show result area
+    resultDiv.classList.remove('hidden');
+    resultContent.textContent = 'Refreshing data...';
+    resultContent.className = 'text-sm p-3 rounded-md bg-blue-50 text-blue-800';
+    
+    // Make API call
+    fetch(`/api/${type}/refresh`, {
+        method: 'POST',
+        headers: {
+            'Content-Type': 'application/json',
+        }
+    })
+    .then(response => response.json())
+    .then(data => {
+        if (data.success) {
+            resultContent.textContent = data.message;
+            resultContent.className = 'text-sm p-3 rounded-md bg-green-50 text-green-800';
+            // Reload status
+            loadStatus();
+        } else {
+            resultContent.textContent = data.error || 'Failed to refresh data';
+            resultContent.className = 'text-sm p-3 rounded-md bg-red-50 text-red-800';
+        }
+    })
+    .catch(error => {
+        resultContent.textContent = 'Network error occurred';
+        resultContent.className = 'text-sm p-3 rounded-md bg-red-50 text-red-800';
+    })
+    .finally(() => {
+        // Re-enable button
+        button.disabled = false;
+        button.textContent = `Refresh ${type.charAt(0).toUpperCase() + type.slice(1)}`;
+        button.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors';
+        
+        // Hide result after 5 seconds
+        setTimeout(() => {
+            resultDiv.classList.add('hidden');
+        }, 5000);
+    });
+}
+
+// API connections are checked manually via refresh buttons
+// No automatic API calls are made to prevent unwanted API usage
+
+function exportData(type) {
+    // Simple CSV export by navigating to the export endpoint
+    window.location.href = `/api/${type}/export`;
+}
+
+// Internal Contacts Management
+let currentEditingContactId = null;
+
+document.addEventListener('DOMContentLoaded', function() {
+    // Load internal contacts on page load
+    loadInternalContacts();
+    
+    // Set up form submission
+    document.getElementById('internalContactForm').addEventListener('submit', handleInternalContactSubmit);
+});
+
+function loadInternalContacts() {
+    fetch('/api/internal-contacts')
+        .then(response => response.json())
+        .then(data => {
+            if (Array.isArray(data)) {
+                displayInternalContacts(data);
+                document.getElementById('internal-contacts-count').textContent = `${data.length} contacts`;
+            } else {
+                console.error('Error loading internal contacts:', data.error);
+            }
+        })
+        .catch(error => {
+            console.error('Error loading internal contacts:', error);
+        });
+}
+
+function displayInternalContacts(contacts) {
+    const tbody = document.getElementById('internal-contacts-table');
+    tbody.innerHTML = '';
+    
+    if (contacts.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="4" class="px-6 py-4 text-center text-gray-500">No internal contacts found</td></tr>';
+        return;
+    }
+    
+    contacts.forEach(contact => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">${contact.name}</td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">${contact.email}</td>
+            <td class="px-6 py-4 whitespace-nowrap">
+                <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${contact.is_active ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'}">
+                    ${contact.is_active ? 'Active' : 'Inactive'}
+                </span>
+            </td>
+            <td class="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                <button onclick="editInternalContact(${contact.id})" class="text-blue-600 hover:text-blue-900 mr-3">Edit</button>
+                <button onclick="deleteInternalContact(${contact.id})" class="text-red-600 hover:text-red-900">Delete</button>
+            </td>
+        `;
+        tbody.appendChild(row);
+    });
+}
+
+function showAddInternalContactModal() {
+    currentEditingContactId = null;
+    document.getElementById('modalTitle').textContent = 'Add Internal Contact';
+    document.getElementById('internalContactForm').reset();
+    document.getElementById('contactActive').checked = true;
+    document.getElementById('internalContactModal').classList.remove('hidden');
+}
+
+function editInternalContact(contactId) {
+    currentEditingContactId = contactId;
+    document.getElementById('modalTitle').textContent = 'Edit Internal Contact';
+    
+    // Fetch contact data and populate form
+    fetch('/api/internal-contacts')
+        .then(response => response.json())
+        .then(contacts => {
+            const contact = contacts.find(c => c.id === contactId);
+            if (contact) {
+                document.getElementById('contactName').value = contact.name;
+                document.getElementById('contactEmail').value = contact.email;
+                document.getElementById('contactActive').checked = contact.is_active;
+                document.getElementById('internalContactModal').classList.remove('hidden');
+            }
+        })
+        .catch(error => {
+            console.error('Error loading contact for edit:', error);
+        });
+}
+
+function hideInternalContactModal() {
+    document.getElementById('internalContactModal').classList.add('hidden');
+    currentEditingContactId = null;
+}
+
+function handleInternalContactSubmit(event) {
+    event.preventDefault();
+    
+    const formData = new FormData(event.target);
+    const data = {
+        name: formData.get('name'),
+        email: formData.get('email'),
+        is_active: formData.get('is_active') === 'on'
+    };
+    
+    const url = currentEditingContactId ? `/api/internal-contacts/${currentEditingContactId}` : '/api/internal-contacts';
+    const method = currentEditingContactId ? 'PUT' : 'POST';
+    
+    fetch(url, {
+        method: method,
+        headers: {
+            'Content-Type': 'application/json',
+        },
+        body: JSON.stringify(data)
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            hideInternalContactModal();
+            loadInternalContacts();
+            showMessage('Internal contact saved successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Error saving internal contact', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error saving internal contact:', error);
+        showMessage('Error saving internal contact', 'error');
+    });
+}
+
+function deleteInternalContact(contactId) {
+    if (!confirm('Are you sure you want to delete this internal contact?')) {
+        return;
+    }
+    
+    fetch(`/api/internal-contacts/${contactId}`, {
+        method: 'DELETE'
+    })
+    .then(response => response.json())
+    .then(result => {
+        if (result.success) {
+            loadInternalContacts();
+            showMessage('Internal contact deleted successfully!', 'success');
+        } else {
+            showMessage(result.error || 'Error deleting internal contact', 'error');
+        }
+    })
+    .catch(error => {
+        console.error('Error deleting internal contact:', error);
+        showMessage('Error deleting internal contact', 'error');
+    });
+}
+
+function showMessage(message, type) {
+    // Create a simple toast notification
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-3 rounded-md text-white z-50 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        document.body.removeChild(toast);
+    }, 3000);
+}
+</script>
+{% endblock %} 
