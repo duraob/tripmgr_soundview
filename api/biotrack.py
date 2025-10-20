@@ -173,13 +173,18 @@ def get_auth_token() -> Optional[str]:
     
     training = get_training_mode()
     
+    # Log authentication attempt details (without exposing credentials)
+    logger.debug(f"Attempting BioTrack authentication with training mode: {training}")
+    logger.debug(f"Username provided: {bool(BIOTRACK_USERNAME)}")
+    logger.debug(f"Password provided: {bool(BIOTRACK_PASSWORD)}")
+    logger.debug(f"License number provided: {bool(BIOTRACK_UBI)}")
+    
     data = {
         "API": "4.0",
         "action": "login",
         "username": BIOTRACK_USERNAME,
         "password": BIOTRACK_PASSWORD,
-        "license_number": BIOTRACK_UBI,
-        "training": training
+        "license_number": BIOTRACK_UBI
     }
     
     try:
@@ -191,6 +196,7 @@ def get_auth_token() -> Optional[str]:
             return token
         else:
             logger.error("Authentication response missing sessionid")
+            logger.error(f"Full authentication response: {response_data}")
             return None
             
     except Exception as e:
@@ -504,6 +510,7 @@ def get_inventory_info(token: str) -> Optional[Dict[str, Dict[str, Any]]]:
                     item_id = item.get("id")
                     item_name = item.get("productname", "Unknown")
                     raw_quantity = item.get("remaining_quantity", "0")
+                    current_room = item.get("currentroom", "")
                     
                     # Ensure quantity is consistently typed as integer
                     if raw_quantity is not None:
@@ -517,7 +524,8 @@ def get_inventory_info(token: str) -> Optional[Dict[str, Dict[str, Any]]]:
                     if item_id:
                         inventory_dict[item_id] = {
                             "name": item_name,
-                            "quantity": item_quantity
+                            "quantity": item_quantity,
+                            "current_room_id": current_room
                         }
                 except KeyError as e:
                     logger.warning(f"Inventory item data missing required field: {e}")
@@ -531,6 +539,101 @@ def get_inventory_info(token: str) -> Optional[Dict[str, Dict[str, Any]]]:
             
     except Exception as e:
         logger.error(f"Failed to get inventory info: {e}")
+        return None
+
+
+def get_inventory_qa_check(token: str, barcode_id: str) -> Optional[Dict[str, Any]]:
+    """
+    Retrieve lab test results for a specific inventory item from BioTrack.
+    
+    Args:
+        token: Authentication token
+        barcode_id: Barcode ID of the inventory item
+    
+    Returns:
+        Dictionary with lab test results or None if failed/no data
+    """
+    if not validate_token(token):
+        return None
+    
+    if not barcode_id:
+        logger.error("Barcode ID is required for QA check")
+        return None
+    
+    # Import training mode function from app
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app import get_training_mode
+    
+    training = get_training_mode()
+    
+    data = {
+        "API": "4.0",
+        "action": "inventory_qa_check_all",
+        "sessionid": token,
+        "barcodeid": barcode_id
+    }
+    
+    try:
+        logger.debug(f"Making QA check request for barcode: {barcode_id}")
+        response_data = _make_api_request(data, "inventory_qa_check_all")
+        
+        # Log the full response for debugging
+        logger.debug(f"QA check response for barcode {barcode_id}: {response_data}")
+        
+        if response_data:
+            # Check for success in different possible formats
+            success = response_data.get("success")
+            
+            logger.debug(f"Success field: {success}")
+            
+            # Try different success indicators
+            if (success == 1 or success == "1"):
+                # Extract lab test data from the response - new structure has 'data' array
+                data_array = response_data.get("data", [])
+                logger.debug(f"Data array found: {data_array}")
+                
+                if data_array:
+                    # Get the first item from the data array
+                    first_item = data_array[0]
+                    test_data = first_item.get("test", [])
+                    logger.debug(f"Test data found: {test_data}")
+                    
+                    lab_results = {}
+                    
+                    # Look for cannabinoid test results (type 2)
+                    for test in test_data:
+                        if test.get("type") == 2:
+                            lab_results = {
+                                "total": test.get("Total"),
+                                "thca": test.get("THCA"),
+                                "thc": test.get("THC"),
+                                "cbda": test.get("CBDA"),
+                                "cbd": test.get("CBD")
+                            }
+                            logger.debug(f"Found cannabinoid data: {lab_results}")
+                            break
+                    
+                    # Only return results if we found cannabinoid data
+                    if lab_results and any(lab_results.values()):
+                        logger.debug(f"Retrieved lab results for barcode {barcode_id}: {lab_results}")
+                        return lab_results
+                    else:
+                        logger.debug(f"No cannabinoid lab data found for barcode {barcode_id}")
+                        return None
+                else:
+                    logger.debug(f"No data array found for barcode {barcode_id}")
+                    return None
+            else:
+                logger.debug(f"QA check not successful for barcode {barcode_id}. Success: {success}")
+                return None
+        else:
+            logger.debug(f"No response data for barcode {barcode_id}")
+            return None
+            
+    except Exception as e:
+        logger.warning(f"Failed to get QA check for barcode {barcode_id}: {e}")
         return None
 
 

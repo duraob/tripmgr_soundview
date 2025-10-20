@@ -3041,6 +3041,280 @@ def contacts():
     """Customer contacts management page"""
     return render_template('contacts.html')
 
+@app.route('/api/inventory-report')
+@login_required
+def get_inventory_report():
+    """Get comprehensive inventory report with lab data and room information"""
+    logger = logging.getLogger('app.inventory_report')
+    logger.info("Generating inventory report with lab data")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
+        
+        # Authenticate with BioTrack
+        logger.debug("Attempting to authenticate with BioTrack")
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        logger.debug("Successfully authenticated with BioTrack")
+        
+        # Get inventory data
+        logger.debug("Calling BioTrack API to fetch inventory")
+        inventory_data = get_inventory_info(token)
+        if not inventory_data:
+            logger.error("Failed to retrieve inventory data from BioTrack")
+            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        
+        # Log inventory data structure for debugging
+        logger.debug(f"Retrieved {len(inventory_data)} inventory items")
+        for item_id, item_info in list(inventory_data.items())[:3]:  # Log first 3 items
+            logger.debug(f"Inventory item {item_id}: {item_info}")
+        
+        # Get room data for room name lookup
+        logger.debug("Calling BioTrack API to fetch rooms")
+        room_data = get_room_info(token)
+        room_lookup = {}
+        if room_data:
+            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        
+        # Process inventory items
+        inventory_items = []
+        items_with_lab_data = 0
+        items_without_lab_data = 0
+        
+        for item_id, item_info in inventory_data.items():
+            try:
+                # Get room name
+                current_room_id = item_info.get('current_room_id', '')
+                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
+                
+                # Try to get lab data for this item (ensure barcode_id is string)
+                # Check if this inventory item has a barcode_id we can use for QA check
+                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
+                lab_results = None
+                
+                if barcode_id:
+                    try:
+                        logger.debug(f"Attempting QA check for barcode: {barcode_id}")
+                        lab_results = get_inventory_qa_check(token, barcode_id)
+                        if lab_results:
+                            logger.debug(f"Found lab data for barcode {barcode_id}: {lab_results}")
+                        else:
+                            logger.debug(f"No lab data found for barcode {barcode_id}")
+                    except Exception as e:
+                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
+                        lab_results = None
+                
+                # Create inventory item entry (ensure ID fields are strings)
+                inventory_item = {
+                    'item_id': str(item_id),
+                    'product_name': item_info.get('name', 'Unknown Product'),
+                    'quantity': item_info.get('quantity', 0),
+                    'current_room_id': str(current_room_id),
+                    'current_room_name': current_room_name,
+                    'barcode_id': barcode_id,
+                    'lab_results': lab_results
+                }
+                
+                if lab_results:
+                    items_with_lab_data += 1
+                else:
+                    items_without_lab_data += 1
+                
+                inventory_items.append(inventory_item)
+                
+            except Exception as e:
+                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
+                continue
+        
+        # Create summary
+        summary = {
+            'total_items': len(inventory_items),
+            'items_with_lab_data': items_with_lab_data,
+            'items_without_lab_data': items_without_lab_data
+        }
+        
+        logger.info(f"Generated inventory report: {summary['total_items']} items, "
+                   f"{summary['items_with_lab_data']} with lab data")
+        
+        return jsonify({
+            'success': True,
+            'inventory_items': inventory_items,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Error generating inventory report: {str(e)}")
+        return jsonify({'error': f'Failed to generate inventory report: {str(e)}'}), 500
+
+
+@app.route('/api/inventory-report/download')
+@login_required
+def download_inventory_report():
+    """Download inventory report as CSV file"""
+    logger = logging.getLogger('app.inventory_report_download')
+    logger.info("Generating downloadable inventory report")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
+        from io import StringIO
+        import csv
+        from datetime import datetime
+        
+        # Authenticate with BioTrack
+        logger.debug("Attempting to authenticate with BioTrack")
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        logger.debug("Successfully authenticated with BioTrack")
+        
+        # Get inventory data
+        logger.debug("Calling BioTrack API to fetch inventory")
+        inventory_data = get_inventory_info(token)
+        if not inventory_data:
+            logger.error("Failed to retrieve inventory data from BioTrack")
+            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        
+        # Get room data for room name lookup
+        logger.debug("Calling BioTrack API to fetch rooms")
+        room_data = get_room_info(token)
+        room_lookup = {}
+        if room_data:
+            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        
+        # Create CSV content
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Write header (Item ID and Room ID are text fields to preserve formatting)
+        writer.writerow([
+            'Item ID (Text)', 'Product Name', 'Quantity', 'Current Room ID (Text)', 
+            'Current Room Name', 'Lab Data Available', 'Total %', 'THCA %', 
+            'THC %', 'CBDA %', 'CBD %'
+        ])
+        
+        # Process inventory items
+        items_processed = 0
+        for item_id, item_info in inventory_data.items():
+            try:
+                # Get room name
+                current_room_id = item_info.get('current_room_id', '')
+                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
+                
+                # Try to get lab data for this item (ensure barcode_id is string)
+                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
+                lab_results = None
+                
+                if barcode_id:
+                    try:
+                        logger.debug(f"Attempting QA check for barcode: {barcode_id}")
+                        lab_results = get_inventory_qa_check(token, barcode_id)
+                    except Exception as e:
+                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
+                        lab_results = None
+                
+                # Lab data fields
+                if lab_results:
+                    lab_data_available = 'Yes'
+                    total_pct = lab_results.get('total', '')
+                    thca_pct = lab_results.get('thca', '')
+                    thc_pct = lab_results.get('thc', '')
+                    cbda_pct = lab_results.get('cbda', '')
+                    cbd_pct = lab_results.get('cbd', '')
+                else:
+                    lab_data_available = 'No'
+                    total_pct = ''
+                    thca_pct = ''
+                    thc_pct = ''
+                    cbda_pct = ''
+                    cbd_pct = ''
+                
+                # Write row (ensure barcode-related fields are strings)
+                writer.writerow([
+                    str(item_id),  # Ensure item_id is string
+                    item_info.get('name', 'Unknown Product'),
+                    item_info.get('quantity', 0),
+                    str(current_room_id),  # Ensure room_id is string
+                    current_room_name,
+                    lab_data_available,
+                    total_pct,
+                    thca_pct,
+                    thc_pct,
+                    cbda_pct,
+                    cbd_pct
+                ])
+                
+                items_processed += 1
+                
+            except Exception as e:
+                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
+                continue
+        
+        output.seek(0)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'inventory_report_{timestamp}.csv'
+        
+        logger.info(f"Generated inventory report CSV: {items_processed} items")
+        
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating inventory report CSV: {str(e)}")
+        return jsonify({'error': f'Failed to generate inventory report: {str(e)}'}), 500
+
+
+@app.route('/api/test-qa-check/<barcode_id>')
+@login_required
+def test_qa_check(barcode_id):
+    """Test endpoint to verify get_inventory_qa_check method"""
+    logger = logging.getLogger('app.test_qa_check')
+    logger.info(f"Testing QA check for barcode: {barcode_id}")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_qa_check
+        
+        # Authenticate with BioTrack
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        # Test QA check
+        logger.debug(f"Calling BioTrack API to check QA for barcode: {barcode_id}")
+        lab_results = get_inventory_qa_check(token, barcode_id)
+        
+        if lab_results:
+            logger.info(f"QA check successful for barcode {barcode_id}: {lab_results}")
+            return jsonify({
+                'success': True,
+                'barcode_id': barcode_id,
+                'lab_results': lab_results
+            })
+        else:
+            logger.info(f"No lab data found for barcode {barcode_id}")
+            return jsonify({
+                'success': True,
+                'barcode_id': barcode_id,
+                'lab_results': None,
+                'message': 'No lab data available for this barcode'
+            })
+        
+    except Exception as e:
+        logger.error(f"Error testing QA check: {str(e)}")
+        return jsonify({'error': f'Error testing QA check: {str(e)}'}), 500
+
+
 @app.route('/help')
 @login_required
 def help():
