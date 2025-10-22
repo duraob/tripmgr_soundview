@@ -35,12 +35,16 @@ class Trip(db.Model):
     approximate_start_time = db.Column(db.DateTime, nullable=True)
     delivery_date = db.Column(db.Date, nullable=True)
     
+    # Background execution status
+    execution_status = db.Column(db.String(20), default='pending')  # pending, processing, completed, failed
+    
     # Relationships
     orders = db.relationship('Order', backref='trip', lazy=True)
     trip_orders = db.relationship('TripOrder', backref='trip', lazy=True)
     driver1 = db.relationship('Driver', foreign_keys=[driver1_id])
     driver2 = db.relationship('Driver', foreign_keys=[driver2_id])
     vehicle = db.relationship('Vehicle', backref='trips', lazy=True)
+    execution = db.relationship('TripExecution', backref='trip', uselist=False)
 
 class Order(db.Model):
     """Order model representing orders from LeafTrade"""
@@ -191,4 +195,16 @@ class InternalContact(db.Model):
 trip_drivers = db.Table('trip_drivers',
     db.Column('trip_id', db.Integer, db.ForeignKey('trip.id'), primary_key=True),
     db.Column('driver_id', db.Integer, db.ForeignKey('driver.id'), primary_key=True)
-) 
+)
+
+class TripExecution(db.Model):
+    """Trip execution tracking model"""
+    __tablename__ = 'trip_executions'
+    
+    trip_id = db.Column(db.Integer, db.ForeignKey('trip.id'), primary_key=True)
+    status = db.Column(db.String(20), default='pending')  # pending, processing, completed, failed
+    progress_message = db.Column(db.Text)
+    job_id = db.Column(db.String(100))  # RQ job ID
+    created_at = db.Column(db.DateTime, default=get_est_now)
+    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    completed_at = db.Column(db.DateTime) 

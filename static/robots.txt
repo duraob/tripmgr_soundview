@@ -1,0 +1,5 @@
+User-agent: *
+Disallow: /
+
+# Block all web crawlers and bots from accessing any part of the site
+# This is a private application for internal use only

@@ -630,7 +630,7 @@ def validate_trip_data_backend(data):
 @app.route('/trips/<int:trip_id>/execute', methods=['POST'])
 @login_required
 def execute_trip(trip_id):
-    """Execute trip - create manifests and send notifications"""
+    """Execute trip - enqueue background job for manifest creation"""
     logger = logging.getLogger('app.execute_trip')
     
     try:
@@ -639,8 +639,11 @@ def execute_trip(trip_id):
         if trip.status == 'completed':
             return jsonify({'error': 'Trip is not in pending or validated status'}), 400
         
+        if trip.execution_status == 'processing':
+            return jsonify({'error': 'Trip is already being processed'}), 400
+        
         # Get trip orders with sequence
-        trip_orders = db.session.query(TripOrder).filter_by(trip_id=trip_id).order_by(TripOrder.sequence_order).all()
+        trip_orders = db.session.query(TripOrder).filter_by(trip_id=trip_id).all()
         
         if not trip_orders:
             return jsonify({'error': 'No orders found for trip'}), 400
@@ -653,349 +656,81 @@ def execute_trip(trip_id):
         if not driver1 or not driver2 or not vehicle:
             return jsonify({'error': 'Driver or vehicle information not found'}), 400
         
-        # Initialize BioTrack API
-        from api.biotrack import get_auth_token, post_sublot, post_sublot_move, post_manifest
-        from api.leaftrade import get_order_details
+        # Enqueue background job
+        from utils.task_queue import enqueue_trip_execution
+        job_id = enqueue_trip_execution(trip_id)
         
-        # Authenticate with BioTrack
-        try:
-            token = get_auth_token()
-            if not token:
-                logger.error("Failed to authenticate with BioTrack API")
-                return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
-        except Exception as e:
-            logger.error(f"BioTrack authentication error: {str(e)}")
-            return jsonify({'error': f'BioTrack authentication failed: {str(e)}'}), 500
+        # Update trip execution status
+        trip.execution_status = 'processing'
+        db.session.commit()
         
-        # Initialize OpenAI client for route optimization
-        route_segments = None
-        
-        # Check if route data already exists (from previous execution attempt)
-        if trip.route_data:
-            try:
-                route_segments = json.loads(trip.route_data)
-                logger.info(f"Using existing route segments from previous execution attempt")
-            except json.JSONDecodeError:
-                logger.warning("Failed to parse existing route data, will regenerate")
-                trip.route_data = None
-        
-        # Only generate route segments if we don't have them already
-        if not route_segments:
-            try:
-                from api.googlemaps_client import GoogleMapsClient
-                googlemaps_client = GoogleMapsClient()
-                
-                # Get trip data for OpenAI routing
-                trip_data = {
-                    'driver1_name': driver1.name,
-                    'driver2_name': driver2.name,
-                    'vehicle_name': vehicle.name,
-                    'delivery_date': get_est_now().strftime('%Y-%m-%d'),
-                    'orders': []
-                }
-                
-                # Extract addresses for OpenAI routing
-                addresses = []
-                for trip_order in trip_orders:
-                    address = trip_order.address or 'Unknown Address'
-                    addresses.append(address)
-                
-                # Generate route segments using OpenAI with retry mechanism
-                logger.info(f"Generating route segments for {len(addresses)} addresses")
-                
-                # Use the actual approximate_start_time from the Trip model
-                if trip.approximate_start_time:
-                    approx_start_time = trip.approximate_start_time.strftime('%Y-%m-%d %I:%M %p')
-                else:
-                    # Fallback to default time if not set
-                    approx_start_time = f"{trip.delivery_date.strftime('%Y-%m-%d')} 08:00 AM"
-                
-                # Implement retry mechanism for critical route generation
-                max_retries = 2  # Original attempt + 1 retry
-                retry_delay = 2  # seconds
-                route_segments = None
-                
-                for attempt in range(max_retries):
-                    try:
-                        logger.info(f"Google Maps route generation attempt {attempt + 1}/{max_retries}")
-                        route_segments = googlemaps_client.generate_route_segments(
-                            addresses=addresses,
-                            delivery_date=trip.delivery_date.strftime('%Y-%m-%d'),
-                            approx_start_time=approx_start_time
-                        )
-                        
-                        if route_segments:
-                            logger.info("Route segment generation completed successfully")
-                            logger.info(f"Generated {len(route_segments)} route segments")
-                            
-                            # Validate route segments match order count
-                            if len(route_segments) != len(trip_orders):
-                                logger.warning(f"Route segment count ({len(route_segments)}) doesn't match order count ({len(trip_orders)})")
-                            
-                            # Store route data in trip immediately after successful generation
-                            trip.route_data = json.dumps(route_segments)
-                            db.session.commit()
-                            logger.info("Route segments saved to database")
-                            break  # Success - exit retry loop
-                            
-                    except Exception as e:
-                        if attempt < max_retries - 1:
-                            logger.warning(f"OpenAI route generation attempt {attempt + 1} failed: {str(e)}")
-                            logger.info(f"Retrying in {retry_delay} seconds...")
-                            time.sleep(retry_delay)
-                            retry_delay *= 2  # Exponential backoff
-                            continue
-                        else:
-                            logger.error(f"Google Maps routing failed after {max_retries} attempts: {str(e)}")
-                            route_segments = None
-                
-                if not route_segments:
-                    logger.error("Failed to generate route segments with Google Maps after all retry attempts")
-                    
-            except Exception as e:
-                logger.error(f"Google Maps routing error: {str(e)}")
-                # Continue with trip execution even if routing fails
-        
-        # Process each order for manifest creation
-        manifest_results = []
-        critical_failures = []  # Track critical failures that should prevent trip activation
-        
-        for trip_order in trip_orders:
-            try:
-                logger.info(f"Processing order {trip_order.order_id} for manifest creation")
-                
-                # Get order details from LeafTrade
-                try:
-                    order_details = get_order_details(trip_order.order_id)
-                    if not order_details:
-                        error_msg = f"Failed to get order details for {trip_order.order_id}"
-                        logger.error(error_msg)
-                        manifest_results.append({
-                            'order_id': trip_order.order_id,
-                            'status': 'failed',
-                            'error': 'Failed to get order details from LeafTrade'
-                        })
-                        critical_failures.append(error_msg)
-                        continue
-                except Exception as e:
-                    error_msg = f"Error getting order details for {trip_order.order_id}: {str(e)}"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': f'LeafTrade API error: {str(e)}'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                # Get location mapping for this dispensary location
-                dispensary_location_id = order_details.get('order', {}).get('dispensary_location', {}).get('id')
-                if not dispensary_location_id:
-                    error_msg = f"No dispensary location ID found in order details for {trip_order.order_id}"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': 'No dispensary location ID found in order details'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                location_mapping = db.session.query(LocationMapping).filter_by(
-                    leaftrade_dispensary_location_id=dispensary_location_id
-                ).first()
-                
-                if not location_mapping:
-                    # Get dispensary name for better error messages
-                    dispensary_location = order_details.get('order', {}).get('dispensary_location', {})
-                    dispensary_name = dispensary_location.get('name', 'Unknown Dispensary')
-                    error_msg = f"No location mapping found for \"{dispensary_name}\" (ID: {dispensary_location_id})"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': f'No location mapping found for "{dispensary_name}"'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                # Get vendor to access license_info for manifest
-                vendor = db.session.query(Vendor).filter_by(biotrack_vendor_id=location_mapping.biotrack_vendor_id).first()
-                vendor_license = vendor.license_info if vendor else location_mapping.biotrack_vendor_id
-                
-                # Process line items for bulk sublot creation
-                line_items = order_details.get('line_items', [])
-                sublot_data = []
-                
-                for line_item in line_items:
-                    barcode_id = line_item.get('barcode_id')  # batch_ref from LeafTrade
-                    quantity = line_item.get('quantity', 1)
-                    if barcode_id:
-                        sublot_data.append({
-                            'barcodeid': barcode_id,
-                            'remove_quantity': str(quantity)
-                        })
-                
-                if not sublot_data:
-                    error_msg = f"No barcode IDs found for order {trip_order.order_id}"
-                    logger.warning(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': 'No barcode IDs found in line items'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                # Create sublots for this order
-                sublot_result = post_sublot(token, "bulk_create", sublot_data)
-                # Check if sublot creation returned an error response
-                if isinstance(sublot_result, dict) and not sublot_result.get('success', True):
-                    error_msg = f"BioTrack sublot creation failed for order {trip_order.order_id}: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': f"BioTrack Error: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                new_barcode_ids = sublot_result
-                
-                # Check if we got any barcode IDs back
-                if not new_barcode_ids:
-                    error_msg = f"No barcode IDs returned from sublot creation for order {trip_order.order_id}"
-                    logger.warning(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': 'No barcode IDs returned from sublot creation'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                # Move new sublots to appropriate room
-                move_data = []
-                for barcode_id in new_barcode_ids:
-                    move_data.append({
-                        'barcodeid': barcode_id,
-                        'room': location_mapping.default_biotrack_room_id or 'default_room'
-                    })
-                
-                move_result = post_sublot_move(token, move_data)
-                if not move_result:
-                    error_msg = f"Failed to move sublots for order {trip_order.order_id}"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': 'Failed to move sublots'
-                    })
-                    critical_failures.append(error_msg)
-                    continue
-                
-                # Find corresponding route segment for this order
-                route_index = trip_order.sequence_order - 1
-                route_segment = route_segments[route_index] if route_segments and route_index < len(route_segments) else None
-                
-                # Create manifest
-                manifest_info = {
-                    'approximate_departure': route_segment['departure_time'] if route_segment else int(datetime.now().timestamp()),
-                    'approximate_arrival': route_segment['arrival_time'] if route_segment else int((datetime.now() + timedelta(hours=2)).timestamp()),
-                    'approximate_route': route_segment['route'] if route_segment else f"Route for order {trip_order.order_id}",
-                    'stop_number': str(trip_order.sequence_order),
-                    'barcodeid': new_barcode_ids,
-                    'vendor_license': vendor_license
-                }
-                
-                manifest_result = post_manifest(
-                    token=token,
-                    manifest_info=manifest_info,
-                    drivers=[driver1.biotrack_id, driver2.biotrack_id],
-                    vehicle=vehicle.biotrack_id
-                )
-                
-                if manifest_result:
-                    # Store manifest ID
-                    trip_order.manifest_id = str(manifest_result)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'success',
-                        'manifest_id': str(manifest_result)
-                    })
-                    logger.info(f"Successfully created manifest for order {trip_order.order_id}")
-                else:
-                    error_msg = f"Failed to create manifest for order {trip_order.order_id}"
-                    logger.error(error_msg)
-                    manifest_results.append({
-                        'order_id': trip_order.order_id,
-                        'status': 'failed',
-                        'error': 'Failed to create manifest'
-                    })
-                    critical_failures.append(error_msg)
-                
-            except Exception as e:
-                error_msg = f"Error processing order {trip_order.order_id}: {str(e)}"
-                logger.error(error_msg)
-                manifest_results.append({
-                    'order_id': trip_order.order_id,
-                    'status': 'failed',
-                    'error': str(e)
-                })
-                critical_failures.append(error_msg)
-        
-        # Check if we have any critical failures
-        if critical_failures:
-            db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': 'Trip execution failed due to critical errors',
-                'manifest_results': manifest_results,
-                'critical_failures': critical_failures
-            }), 400
-        
-        # Check if we have mixed results (some success, some failure)
-        successful_orders = [r for r in manifest_results if r['status'] == 'success']
-        failed_orders = [r for r in manifest_results if r['status'] == 'failed']
-        
-        if failed_orders and successful_orders:
-            # Partial success - update trip status to reflect this
-            trip.status = 'partially_completed'
-            trip.date_transacted = get_est_now()
-            db.session.commit()
-            
-            return jsonify({
-                'success': True,
-                'message': f'Trip partially completed: {len(successful_orders)} orders succeeded, {len(failed_orders)} failed',
-                'manifest_results': manifest_results,
-                'successful_count': len(successful_orders),
-                'failed_count': len(failed_orders)
-            })
-        elif failed_orders:
-            # All orders failed
-            db.session.rollback()
-            return jsonify({
-                'success': False,
-                'error': 'All orders failed to process',
-                'manifest_results': manifest_results
-            }), 400
-        else:
-            # All orders succeeded
-            trip.status = 'completed'
-            trip.date_transacted = get_est_now()
-            db.session.commit()
+        logger.info(f"Trip {trip_id} execution enqueued with job ID: {job_id}")
         
         return jsonify({
             'success': True,
-            'message': 'Trip execution completed successfully',
-            'manifest_results': manifest_results
+            'message': 'Trip execution started in background',
+            'job_id': job_id,
+            'redirect_url': f'/trips/{trip_id}/progress'
         })
         
     except Exception as e:
         db.session.rollback()
         logger.error(f"Unexpected error in execute_trip: {str(e)}")
         return jsonify({'error': f'Error executing trip: {str(e)}'}), 500
+
+@app.route('/api/trips/<int:trip_id>/execution-status', methods=['GET'])
+@login_required
+def get_trip_execution_status(trip_id):
+    """Get trip execution status"""
+    try:
+        trip = Trip.query.get_or_404(trip_id)
+        execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
+        
+        if not execution:
+            return jsonify({
+                'trip_id': trip_id,
+                'execution_status': 'pending',
+                'progress_percentage': 0,
+                'progress_message': 'Trip execution not started',
+                'created_at': trip.date_created.isoformat() if trip.date_created else None
+            })
+        
+        # Calculate progress percentage based on status
+        if execution.status == 'completed':
+            progress_percentage = 100
+        elif execution.status == 'failed':
+            progress_percentage = 0
+        elif execution.status == 'processing':
+            # Calculate progress based on time elapsed
+            elapsed_seconds = (get_est_now() - execution.created_at).total_seconds()
+            
+            # Progress over time: 0-60 seconds = 10-50%, 60+ seconds = 50-90%
+            if elapsed_seconds < 60:
+                progress_percentage = min(50, 10 + (elapsed_seconds / 60) * 40)
+            else:
+                progress_percentage = min(90, 50 + ((elapsed_seconds - 60) / 120) * 40)
+        else:
+            progress_percentage = 0
+        
+        return jsonify({
+            'trip_id': trip_id,
+            'execution_status': execution.status,
+            'progress_percentage': progress_percentage,
+            'progress_message': execution.progress_message,
+            'created_at': execution.created_at.isoformat() if execution.created_at else None,
+            'updated_at': execution.updated_at.isoformat() if execution.updated_at else None,
+            'completed_at': execution.completed_at.isoformat() if execution.completed_at else None
+        })
+        
+    except Exception as e:
+        return jsonify({'error': f'Failed to get trip execution status: {str(e)}'}), 500
+
+@app.route('/trips/<int:trip_id>/progress')
+@login_required
+def trip_progress(trip_id):
+    """Trip execution progress page"""
+    trip = Trip.query.get_or_404(trip_id)
+    return render_template('trip_progress.html', trip=trip)
 
 @app.route('/api/error-logs', methods=['GET'])
 @login_required
@@ -3320,6 +3055,11 @@ def test_qa_check(barcode_id):
 def help():
     """Help and user guide page"""
     return render_template('help.html')
+
+@app.route('/robots.txt')
+def robots_txt():
+    """Serve robots.txt file to prevent bot crawling"""
+    return app.send_static_file('robots.txt')
 
 if __name__ == '__main__':
     logger = logging.getLogger('app.main')

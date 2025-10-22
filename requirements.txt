@@ -12,3 +12,5 @@ email-validator==2.0.0
 gunicorn==21.2.0
 msal==1.24.1 
 tzdata
+redis==5.0.1
+rq==1.15.1

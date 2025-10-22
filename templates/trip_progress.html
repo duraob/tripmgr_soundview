@@ -1,0 +1,149 @@
+{% extends "base.html" %}
+
+{% block content %}
+<div class="min-h-screen bg-gray-50 py-8">
+    <div class="max-w-4xl mx-auto px-4 sm:px-6 lg:px-8">
+        <!-- Trip Progress -->
+        <div class="bg-white rounded-xl shadow-lg p-8 text-center">
+            <div class="mb-8">
+                <div class="animate-spin rounded-full h-20 w-20 border-b-4 border-blue-600 mx-auto mb-6" id="progress-spinner"></div>
+                <h1 class="text-3xl font-bold text-gray-900 mb-4">Processing Trip Execution</h1>
+                <p class="text-xl text-gray-600 mb-6" id="current-status">Starting trip execution...</p>
+            </div>
+            
+            <!-- Progress Bar -->
+            <div class="mb-8">
+                <div class="flex justify-between items-center mb-2">
+                    <span class="text-sm font-medium text-gray-700">Progress</span>
+                    <span class="text-sm text-gray-500" id="progress-text">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-4">
+                    <div class="bg-gradient-to-r from-blue-600 to-blue-800 h-4 rounded-full transition-all duration-1000" 
+                         id="progress-bar" style="width: 0%"></div>
+                </div>
+            </div>
+            
+            <!-- Trip Details -->
+            <div class="bg-gray-50 rounded-lg p-6 text-left">
+                <h3 class="text-lg font-semibold text-gray-900 mb-4">Trip Details</h3>
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Trip ID:</span>
+                        <span class="text-sm text-gray-900">{{ trip.id }}</span>
+                    </div>
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Status:</span>
+                        <span class="text-sm text-gray-900" id="trip-status">{{ trip.status }}</span>
+                    </div>
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Driver 1:</span>
+                        <span class="text-sm text-gray-900">{{ trip.driver1.name if trip.driver1 else 'N/A' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Driver 2:</span>
+                        <span class="text-sm text-gray-900">{{ trip.driver2.name if trip.driver2 else 'N/A' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Vehicle:</span>
+                        <span class="text-sm text-gray-900">{{ trip.vehicle.name if trip.vehicle else 'N/A' }}</span>
+                    </div>
+                    <div>
+                        <span class="text-sm font-medium text-gray-500">Delivery Date:</span>
+                        <span class="text-sm text-gray-900">{{ trip.delivery_date.strftime('%Y-%m-%d') if trip.delivery_date else 'N/A' }}</span>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+    const tripId = {{ trip.id }};
+    let pollInterval;
+    let isProcessing = true;
+    
+    // Start polling for trip execution status
+    startPolling();
+    
+    function startPolling() {
+        pollInterval = setInterval(checkTripStatus, 3000); // Poll every 3 seconds
+    }
+    
+    function checkTripStatus() {
+        fetch(`/api/trips/${tripId}/execution-status`)
+            .then(response => response.json())
+            .then(data => {
+                if (data.error) {
+                    console.error('Error checking trip status:', data.error);
+                    return;
+                }
+                
+                updateProgress(data);
+                
+                if (data.execution_status === 'completed') {
+                    isProcessing = false;
+                    clearInterval(pollInterval);
+                    showCompletedState(data);
+                } else if (data.execution_status === 'failed') {
+                    isProcessing = false;
+                    clearInterval(pollInterval);
+                    showErrorState(data);
+                }
+            })
+            .catch(error => {
+                console.error('Error polling trip status:', error);
+            });
+    }
+    
+    function updateProgress(data) {
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const currentStatus = document.getElementById('current-status');
+        const tripStatus = document.getElementById('trip-status');
+        
+        // Update progress bar
+        progressBar.style.width = `${data.progress_percentage}%`;
+        progressText.textContent = `${Math.round(data.progress_percentage)}%`;
+        
+        // Update status message
+        if (data.progress_message) {
+            currentStatus.textContent = data.progress_message;
+        }
+        
+        // Update trip status
+        if (data.execution_status) {
+            tripStatus.textContent = data.execution_status;
+        }
+    }
+    
+    function showCompletedState(data) {
+        const spinner = document.getElementById('progress-spinner');
+        spinner.classList.remove('animate-spin');
+        spinner.classList.add('text-green-500');
+        spinner.innerHTML = '✓';
+        
+        document.getElementById('current-status').textContent = 'Trip execution completed successfully!';
+        
+        // Redirect to trip detail page after 2 seconds
+        setTimeout(() => {
+            window.location.href = `/trips/${tripId}`;
+        }, 2000);
+    }
+    
+    function showErrorState(data) {
+        const spinner = document.getElementById('progress-spinner');
+        spinner.classList.remove('animate-spin');
+        spinner.classList.add('text-red-500');
+        spinner.innerHTML = '✗';
+        
+        document.getElementById('current-status').textContent = 'Trip execution failed. Please try again.';
+        
+        // Show error details if available
+        if (data.progress_message) {
+            document.getElementById('current-status').textContent += ` Error: ${data.progress_message}`;
+        }
+    }
+});
+</script>
+{% endblock %}
