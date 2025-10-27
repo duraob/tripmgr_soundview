@@ -125,6 +125,9 @@
                         <button onclick="selectAllRooms()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Select All</button>
                         <button onclick="clearAllRooms()" class="text-sm text-gray-600 hover:text-gray-800 font-medium">Clear All</button>
                         <button onclick="refreshRoomList()" class="text-sm text-green-600 hover:text-green-800 font-medium">🔄 Refresh Rooms</button>
+                        <button onclick="saveRoomSelection()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors">
+                            💾 Save Selection
+                        </button>
                     </div>
                 </div>
                 
@@ -740,7 +743,10 @@ async function loadRoomSelection() {
         roomContainer.innerHTML = '';
         
         if (roomsData.rooms && roomsData.rooms.length > 0) {
-            roomsData.rooms.forEach(room => {
+            // Sort rooms alphabetically by name
+            const sortedRooms = roomsData.rooms.sort((a, b) => a.name.localeCompare(b.name));
+            
+            sortedRooms.forEach(room => {
                 const isSelected = selectedRooms.includes(room.id.toString());
                 const checkbox = document.createElement('div');
                 checkbox.className = 'flex items-center space-x-2';
@@ -750,7 +756,7 @@ async function loadRoomSelection() {
                            value="${room.id}" 
                            ${isSelected ? 'checked' : ''}
                            class="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                           onchange="saveRoomSelection()">
+                           onchange="markAsUnsaved()">
                     <label for="room-${room.id}" class="text-sm text-gray-700">${room.name}</label>
                 `;
                 roomContainer.appendChild(checkbox);
@@ -765,6 +771,14 @@ async function loadRoomSelection() {
 }
 
 async function saveRoomSelection() {
+    const saveButton = event.target;
+    const originalText = saveButton.textContent;
+    
+    // Disable button and show loading
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving...';
+    saveButton.className = 'bg-gray-400 text-white px-3 py-1 rounded text-sm font-medium cursor-not-allowed';
+    
     try {
         const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]:checked');
         const selectedRooms = Array.from(checkboxes).map(cb => cb.value);
@@ -788,23 +802,38 @@ async function saveRoomSelection() {
         console.error('Error saving room selection:', error);
         document.getElementById('finished-goods-status').textContent = 'Error saving room selection';
         document.getElementById('finished-goods-status').className = 'text-sm text-red-600';
+    } finally {
+        // Re-enable button
+        saveButton.disabled = false;
+        saveButton.textContent = originalText;
+        saveButton.className = 'bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors';
     }
 }
 
 function selectAllRooms() {
     const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
-    saveRoomSelection();
+    // Update status to show unsaved changes
+    document.getElementById('finished-goods-status').textContent = 'Changes not saved - click Save Selection';
+    document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
 }
 
 function clearAllRooms() {
     const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
-    saveRoomSelection();
+    // Update status to show unsaved changes
+    document.getElementById('finished-goods-status').textContent = 'Changes not saved - click Save Selection';
+    document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
 }
 
 function refreshRoomList() {
     loadRoomSelection();
+}
+
+function markAsUnsaved() {
+    // Update status to show unsaved changes
+    document.getElementById('finished-goods-status').textContent = 'Changes not saved - click Save Selection';
+    document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
 }
 
 async function downloadFinishedGoodsReport() {
