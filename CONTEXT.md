@@ -43,6 +43,15 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Error Messages**: Updated error messages to specify "valid BioTrack UIDs (16-digit numbers)"
 - **Minimal Code**: Following .cursorrules - added single validation function used in both places
 
+### Route Data Integration (Latest)
+- **Route Data Usage**: Fixed manifest creation to use actual route data from Google Maps API
+- **Timing Integration**: Manifest now uses actual departure/arrival times from route segments
+- **Direction Integration**: Manifest now includes real turn-by-turn directions from route segments
+- **Sequence Integration**: Manifest uses correct stop number based on trip order sequence
+- **Fallback Logic**: Maintains fallback values if route data is unavailable
+- **Reference Alignment**: Now matches reference implementation pattern for route data usage
+- **Minimal Changes**: Following .cursorrules - updated only manifest creation logic
+
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export
 - **Enhanced Data Export**: Mappings export now includes vendor names for better readability

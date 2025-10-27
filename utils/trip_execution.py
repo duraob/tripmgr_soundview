@@ -135,7 +135,7 @@ def execute_trip_background_job(trip_id):
                         continue
                     
                     # Process sublot and manifest creation
-                    result = _process_order_manifest(trip_order, order_details, token)
+                    result = _process_order_manifest(trip_order, order_details, token, route_segments)
                     manifest_results.append(result)
                     
                     if result['status'] == 'success':
@@ -224,7 +224,7 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
     
     db.session.commit()
 
-def _process_order_manifest(trip_order, order_details, token):
+def _process_order_manifest(trip_order, order_details, token, route_segments=None):
     """Process individual order manifest creation using original working pattern"""
     try:
         print(f"Processing manifest for order {trip_order.order_id}")
@@ -337,13 +337,18 @@ def _process_order_manifest(trip_order, order_details, token):
             if location_mapping and location_mapping.biotrack_vendor_id:
                 vendor_license = location_mapping.biotrack_vendor_id
         
-        # Create manifest (original working pattern)
+        # Create manifest with route data (original working pattern)
         print(f"Creating manifest for order {trip_order.order_id}")
+        
+        # Get route segment for this order based on sequence
+        route_index = trip_order.sequence_order - 1
+        route_segment = route_segments[route_index] if route_segments and route_index < len(route_segments) else None
+        
         manifest_data = {
-            'approximate_departure': int(datetime.now().timestamp()),
-            'approximate_arrival': int(datetime.now().timestamp()) + 3600,  # 1 hour later
-            'approximate_route': f"Route for order {trip_order.order_id}",
-            'stop_number': "1",
+            'approximate_departure': route_segment['departure_time'] if route_segment else int(datetime.now().timestamp()),
+            'approximate_arrival': route_segment['arrival_time'] if route_segment else int((datetime.now().timestamp() + 3600)),
+            'approximate_route': route_segment['route'] if route_segment else f"Route for order {trip_order.order_id}",
+            'stop_number': str(trip_order.sequence_order),
             'barcodeid': new_barcode_ids,
             'vendor_license': vendor_license
         }
