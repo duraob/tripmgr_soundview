@@ -92,11 +92,11 @@
                         <!-- Action Buttons -->
                         <div class="mt-4">
                             <button id="simple-finished-goods-generate-btn" onclick="generateSimpleFinishedGoodsReport()" 
-                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
+                                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                                 🔄 Generate Report
                             </button>
                             <button id="simple-finished-goods-download-btn" onclick="downloadSimpleFinishedGoodsReport()" 
-                                    class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors hidden">
+                                    class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors hidden">
                                 📥 Download Report
                             </button>
                         </div>
@@ -1064,7 +1064,7 @@ function updateSimpleFinishedGoodsUI(data) {
         timestampDiv.textContent = `Last generated: ${formatSimpleTimestamp(data.timestamp)}`;
         generateBtn.disabled = false;
         generateBtn.textContent = '🔄 Refresh Report';
-        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
         generateBtn.classList.remove('hidden');
         downloadBtn.classList.remove('hidden');
     } else if (data.status === 'generating') {
@@ -1081,7 +1081,7 @@ function updateSimpleFinishedGoodsUI(data) {
         timestampDiv.textContent = '';
         generateBtn.disabled = false;
         generateBtn.textContent = '🔄 Generate Report';
-        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
         downloadBtn.classList.add('hidden');
     }
 }
@@ -1166,7 +1166,7 @@ async function generateSimpleFinishedGoodsReport() {
             // Reset button on error
             generateBtn.disabled = false;
             generateBtn.textContent = '🔄 Generate Report';
-            generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+            generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
             statusText.textContent = '❌ Error: ' + data.error;
             statusText.className = 'text-sm text-red-600';
             showToast('Error: ' + data.error, 'error');
@@ -1177,7 +1177,7 @@ async function generateSimpleFinishedGoodsReport() {
         // Reset button on error
         generateBtn.disabled = false;
         generateBtn.textContent = '🔄 Generate Report';
-        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
         statusText.textContent = '❌ Error generating report';
         statusText.className = 'text-sm text-red-600';
         showToast('Error generating report', 'error');
