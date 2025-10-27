@@ -2145,6 +2145,15 @@ def order_processing():
     """Order processing page for single order sublot processing"""
     return render_template('order_processing.html')
 
+def _is_valid_biotrack_uid(barcode_id):
+    """Validate that barcode_id is a standard BioTrack UID (16-digit number)"""
+    if not barcode_id:
+        return False
+    
+    # Convert to string and check if it's exactly 16 digits
+    barcode_str = str(barcode_id).strip()
+    return len(barcode_str) == 16 and barcode_str.isdigit()
+
 def validate_trip(trip_id):
     """Validate trip using existing logic patterns from execute_trip"""
     logger = logging.getLogger('app.validate_trip')
@@ -2246,12 +2255,14 @@ def validate_trip(trip_id):
             # Check line items and barcode IDs, aggregate quantities
             line_items = order_details.get('line_items', [])
             barcode_ids = []
+            invalid_uid_count = 0
             
             for line_item in line_items:
                 barcode_id = line_item.get('barcode_id')
                 quantity = line_item.get('quantity', 0)
                 
-                if barcode_id:
+                # Only process line items with valid BioTrack UIDs (16-digit numbers)
+                if barcode_id and _is_valid_biotrack_uid(barcode_id):
                     barcode_ids.append(barcode_id)
                     
                     # Aggregate quantities by barcode_id
@@ -2259,11 +2270,18 @@ def validate_trip(trip_id):
                         inventory_requirements[barcode_id] += quantity
                     else:
                         inventory_requirements[barcode_id] = quantity
+                elif barcode_id:
+                    invalid_uid_count += 1
+                    logger.warning(f"Skipping invalid BioTrack UID in validation: {barcode_id} (not 16 digits)")
+            
+            # Log summary of filtered items
+            if invalid_uid_count > 0:
+                logger.info(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs during validation")
             
             if not barcode_ids:
-                order_errors.append(f'No barcode IDs found for order {trip_order.order_id}')
+                order_errors.append(f'No valid BioTrack UIDs (16-digit numbers) found for order {trip_order.order_id}')
             else:
-                validation_summary.append(f'✓ Order {trip_order.order_id}: {len(barcode_ids)} barcode IDs found')
+                validation_summary.append(f'✓ Order {trip_order.order_id}: {len(barcode_ids)} valid BioTrack UIDs found')
             
             if order_errors:
                 validation_errors.extend(order_errors)

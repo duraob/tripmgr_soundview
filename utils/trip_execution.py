@@ -9,6 +9,16 @@ from datetime import datetime
 
 from models import db, Trip, TripOrder, Driver, Vehicle, TripExecution
 from utils.timezone import get_est_now
+import re
+
+def _is_valid_biotrack_uid(barcode_id):
+    """Validate that barcode_id is a standard BioTrack UID (16-digit number)"""
+    if not barcode_id:
+        return False
+    
+    # Convert to string and check if it's exactly 16 digits
+    barcode_str = str(barcode_id).strip()
+    return len(barcode_str) == 16 and barcode_str.isdigit()
 
 def execute_trip_background_job(trip_id):
     """RQ job function - executes trip in background"""
@@ -229,23 +239,33 @@ def _process_order_manifest(trip_order, order_details, token):
         # Get line items for sublot creation (original working pattern)
         line_items = order_details.get('line_items', [])
         sublot_data = []
+        invalid_uid_count = 0
         
         for line_item in line_items:
             barcode_id = line_item.get('barcode_id')  # batch_ref from LeafTrade
             quantity = line_item.get('quantity', 1)
-            if barcode_id:
+            
+            # Only process line items with valid BioTrack UIDs (16-digit numbers)
+            if barcode_id and _is_valid_biotrack_uid(barcode_id):
                 sublot_data.append({
                     'barcodeid': barcode_id,
                     'remove_quantity': str(quantity)
                 })
+            elif barcode_id:
+                invalid_uid_count += 1
+                print(f"Skipping invalid BioTrack UID: {barcode_id} (not 16 digits)")
+        
+        # Log summary of filtered items
+        if invalid_uid_count > 0:
+            print(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs")
         
         if not sublot_data:
-            error_msg = f"No barcode IDs found for order {trip_order.order_id}"
+            error_msg = f"No valid BioTrack UIDs (16-digit numbers) found for order {trip_order.order_id}"
             print(f"Order processing failed: {error_msg}")
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
-                'error': 'No barcode IDs found in line items'
+                'error': 'No valid BioTrack UIDs found in line items'
             }
         
         # Create sublots for this order (original working pattern)

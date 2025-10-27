@@ -34,6 +34,15 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Room Override**: Added support for `trip_order.room_override` field
 - **Error Resolution**: Fixed "TripOrder object has no attribute 'default_biotrack_room_id'" error
 
+### BioTrack UID Validation (Current)
+- **UID Validation**: Added validation for standard BioTrack UIDs (16-digit numbers)
+- **Trip Execution**: Filters out invalid UIDs during sublot creation in background worker
+- **Frontend Validation**: Filters out invalid UIDs during inventory check in validation workflow
+- **Consistent Filtering**: Both execution and validation now use same UID validation logic
+- **Enhanced Logging**: Added detailed logging for filtered invalid UIDs
+- **Error Messages**: Updated error messages to specify "valid BioTrack UIDs (16-digit numbers)"
+- **Minimal Code**: Following .cursorrules - added single validation function used in both places
+
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export
 - **Enhanced Data Export**: Mappings export now includes vendor names for better readability
