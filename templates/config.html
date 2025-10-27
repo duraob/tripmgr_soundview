@@ -1028,7 +1028,10 @@ function updateSimpleInventoryUI(data) {
         statusText.textContent = '✅ Report ready for download';
         statusText.className = 'text-sm text-green-600';
         timestampDiv.textContent = `Last generated: ${formatSimpleTimestamp(data.timestamp)}`;
-        generateBtn.classList.add('hidden');
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Refresh Report';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        generateBtn.classList.remove('hidden');
         downloadBtn.classList.remove('hidden');
     } else if (data.status === 'generating') {
         statusText.textContent = '🔄 Report is being generated...';
@@ -1059,7 +1062,10 @@ function updateSimpleFinishedGoodsUI(data) {
         statusText.textContent = '✅ Report ready for download';
         statusText.className = 'text-sm text-green-600';
         timestampDiv.textContent = `Last generated: ${formatSimpleTimestamp(data.timestamp)}`;
-        generateBtn.classList.add('hidden');
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Refresh Report';
+        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        generateBtn.classList.remove('hidden');
         downloadBtn.classList.remove('hidden');
     } else if (data.status === 'generating') {
         statusText.textContent = '🔄 Report is being generated...';

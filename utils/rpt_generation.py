@@ -161,7 +161,7 @@ def _create_inventory_csv(inventory_data, room_lookup):
     for item_id, item_info in inventory_data.items():
         try:
             # Get room name
-            current_room_id = str(item_info.get('currentroom', ''))
+            current_room_id = item_info.get('currentroom', '')
             current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
             
             # Try to get lab data
@@ -227,8 +227,8 @@ def _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms):
     for item_id, item_info in inventory_data.items():
         try:
             # Filter by selected rooms
-            current_room_id = str(item_info.get('currentroom', ''))
-            if selected_rooms and current_room_id not in selected_rooms:
+            current_room_id = item_info.get('currentroom', '')
+            if selected_rooms and str(current_room_id) not in selected_rooms:
                 continue
             
             # Filter by inventory type
