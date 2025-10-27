@@ -84,15 +84,17 @@ def execute_trip_background_job(trip_id):
                     address = trip_order.address or 'Unknown Address'
                     addresses.append(address)
                 
-                # Generate route segments using OpenAI
+                # Generate route segments using Google Maps
                 print(f"Generating route segments for {len(addresses)} addresses")
                 
+                # Prepare delivery date and start time
+                delivery_date = trip.delivery_date.strftime('%Y-%m-%d')
                 if trip.approximate_start_time:
                     approx_start_time = trip.approximate_start_time.strftime('%Y-%m-%d %I:%M %p')
                 else:
-                    approx_start_time = f"{trip.delivery_date.strftime('%Y-%m-%d')} 08:00 AM"
+                    approx_start_time = f"{delivery_date} 08:00 AM"
                 
-                route_segments = googlemaps_client.generate_route_segments(addresses, approx_start_time)
+                route_segments = googlemaps_client.generate_route_segments(addresses, delivery_date, approx_start_time)
                 
                 # Save route data to trip
                 trip.route_data = json.dumps(route_segments)

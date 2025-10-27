@@ -10,8 +10,9 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Minimal Changes**: Updated only necessary files following .cursorrules principles
 - **Worker Fix**: Added `from app import app` and `with app.app_context():` to worker.py
 - **Trip Execution Fix**: Wrapped entire trip execution function in Flask app context
+- **GoogleMaps API Fix**: Fixed method signature for `generate_route_segments()` - now passes 3 arguments (addresses, delivery_date, approx_start_time)
 - **Production Ready**: Worker now properly accesses database within Flask context
-- **Error Resolution**: Fixed "Working outside of application context" RuntimeError
+- **Error Resolution**: Fixed "Working outside of application context" RuntimeError and GoogleMaps API TypeError
 
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export
