@@ -3000,8 +3000,8 @@ def get_inventory_report():
         
         for item_id, item_info in inventory_data.items():
             try:
-                # Get room name
-                current_room_id = item_info.get('current_room_id', '')
+                # Get room name - use correct field name from BioTrack response
+                current_room_id = str(item_info.get('currentroom', ''))
                 current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
                 
                 # Try to get lab data for this item (ensure barcode_id is string)
@@ -3021,12 +3021,12 @@ def get_inventory_report():
                         logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
                         lab_results = None
                 
-                # Create inventory item entry (ensure ID fields are strings)
+                # Create inventory item entry - use correct field names from BioTrack response
                 inventory_item = {
                     'item_id': str(item_id),
-                    'product_name': item_info.get('name', 'Unknown Product'),
-                    'quantity': item_info.get('quantity', 0),
-                    'current_room_id': str(current_room_id),
+                    'product_name': item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
+                    'quantity': item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
+                    'current_room_id': current_room_id,
                     'current_room_name': current_room_name,
                     'barcode_id': barcode_id,
                     'lab_results': lab_results
@@ -3115,13 +3115,13 @@ def get_finished_goods_report():
         
         for item_id, item_info in inventory_data.items():
             try:
-                # Filter by selected rooms
+                # Filter by selected rooms - use correct field name from BioTrack response
                 current_room_id = str(item_info.get('currentroom', ''))
                 if selected_rooms and current_room_id not in selected_rooms:
                     filtered_by_room += 1
                     continue
                 
-                # Filter by inventory type
+                # Filter by inventory type - use correct field name from BioTrack response
                 inventory_type = item_info.get('inventorytype')
                 if inventory_type not in finished_goods_types:
                     filtered_by_type += 1
@@ -3130,7 +3130,7 @@ def get_finished_goods_report():
                 # Get room name
                 current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
                 
-                # Try to get lab data for this item
+                # Try to get lab data for this item - use correct field names from BioTrack response
                 barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
                 lab_results = None
                 
@@ -3151,11 +3151,11 @@ def get_finished_goods_report():
                     filtered_by_lab += 1
                     continue
                 
-                # Create inventory item entry
+                # Create inventory item entry - use correct field names from BioTrack response
                 inventory_item = {
                     'item_id': str(item_id),
-                    'product_name': item_info.get('name', 'Unknown Product'),
-                    'quantity': item_info.get('quantity', 0),
+                    'product_name': item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
+                    'quantity': item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
                     'current_room_id': current_room_id,
                     'current_room_name': current_room_name,
                     'barcode_id': barcode_id,
@@ -3297,11 +3297,11 @@ def download_finished_goods_report():
                 cbda_pct = lab_results.get('cbda', '') if lab_results else ''
                 cbd_pct = lab_results.get('cbd', '') if lab_results else ''
                 
-                # Write row
+                # Write row - use correct field names from BioTrack response
                 writer.writerow([
                     str(item_id),
-                    item_info.get('name', 'Unknown Product'),
-                    item_info.get('quantity', 0),
+                    item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
+                    item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
                     current_room_id,
                     current_room_name,
                     inventory_type,
@@ -3389,8 +3389,8 @@ def download_inventory_report():
         items_processed = 0
         for item_id, item_info in inventory_data.items():
             try:
-                # Get room name
-                current_room_id = item_info.get('current_room_id', '')
+                # Get room name - use correct field name from BioTrack response
+                current_room_id = str(item_info.get('currentroom', ''))
                 current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
                 
                 # Try to get lab data for this item (ensure barcode_id is string)
@@ -3421,11 +3421,11 @@ def download_inventory_report():
                     cbda_pct = ''
                     cbd_pct = ''
                 
-                # Write row (ensure barcode-related fields are strings)
+                # Write row - use correct field names from BioTrack response
                 writer.writerow([
                     str(item_id),  # Ensure item_id is string
-                    item_info.get('name', 'Unknown Product'),
-                    item_info.get('quantity', 0),
+                    item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
+                    item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
                     str(current_room_id),  # Ensure room_id is string
                     current_room_name,
                     lab_data_available,

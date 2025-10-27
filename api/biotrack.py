@@ -508,25 +508,9 @@ def get_inventory_info(token: str) -> Optional[Dict[str, Dict[str, Any]]]:
             for item in inventory:
                 try:
                     item_id = item.get("id")
-                    item_name = item.get("productname", "Unknown")
-                    raw_quantity = item.get("remaining_quantity", "0")
-                    current_room = item.get("currentroom", "")
-                    
-                    # Ensure quantity is consistently typed as integer
-                    if raw_quantity is not None:
-                        try:
-                            item_quantity = int(float(raw_quantity))  # Handle both string and float inputs
-                        except (ValueError, TypeError):
-                            item_quantity = 0
-                    else:
-                        item_quantity = 0
-                    
                     if item_id:
-                        inventory_dict[item_id] = {
-                            "name": item_name,
-                            "quantity": item_quantity,
-                            "current_room_id": current_room
-                        }
+                        # Return the full item data from BioTrack instead of just a subset
+                        inventory_dict[item_id] = item
                 except KeyError as e:
                     logger.warning(f"Inventory item data missing required field: {e}")
                     continue
