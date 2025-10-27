@@ -11,8 +11,19 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Worker Fix**: Added `from app import app` and `with app.app_context():` to worker.py
 - **Trip Execution Fix**: Wrapped entire trip execution function in Flask app context
 - **GoogleMaps API Fix**: Fixed method signature for `generate_route_segments()` - now passes 3 arguments (addresses, delivery_date, approx_start_time)
+- **Enhanced Debugging**: Added detailed logging for order processing, sublot creation, and manifest creation
+- **Error Details**: Critical failures now include specific error messages for better troubleshooting
 - **Production Ready**: Worker now properly accesses database within Flask context
 - **Error Resolution**: Fixed "Working outside of application context" RuntimeError and GoogleMaps API TypeError
+
+### BioTrack API Pattern Fix (Current)
+- **Original Working Pattern**: Restored original working BioTrack API pattern from reference code
+- **Function Signatures**: Fixed BioTrack API function calls to match original working signatures
+- **New Function**: Added `post_sublot_bulk_create()` function to match original working pattern
+- **Order Processing**: Simplified order processing to use original working flow: Order → Sublot → Move → Manifest
+- **Enhanced Debugging**: Maintained enhanced debugging statements (better than original)
+- **Minimal Code**: Following .cursorrules - minimal changes, simple solution, no over-engineering
+- **Production Ready**: Trip execution now follows original working methodology with background worker compatibility
 
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export

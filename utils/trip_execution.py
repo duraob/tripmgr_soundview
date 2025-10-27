@@ -42,7 +42,7 @@ def execute_trip_background_job(trip_id):
                 raise Exception("Driver or vehicle information not found")
             
             # Initialize BioTrack API
-            from api.biotrack import get_auth_token, post_sublot, post_sublot_move, post_manifest
+            from api.biotrack import get_auth_token, post_sublot_bulk_create, post_sublot_move, post_manifest
             from api.leaftrade import get_order_details
             
             # Authenticate with BioTrack
@@ -115,6 +115,7 @@ def execute_trip_background_job(trip_id):
                     order_details = get_order_details(trip_order.order_id)
                     if not order_details:
                         error_msg = f"Could not retrieve order details for {trip_order.order_id}"
+                        print(f"Order processing failed: {error_msg}")
                         manifest_results.append({
                             'order_id': trip_order.order_id,
                             'status': 'failed',
@@ -128,8 +129,10 @@ def execute_trip_background_job(trip_id):
                     manifest_results.append(result)
                     
                     if result['status'] == 'success':
+                        print(f"Order {trip_order.order_id} processed successfully")
                         successful_orders.append(result)
                     else:
+                        print(f"Order {trip_order.order_id} failed: {result.get('error', 'Unknown error')}")
                         failed_orders.append(result)
                         if 'critical' in result.get('error', '').lower():
                             critical_failures.append(result['error'])
@@ -146,10 +149,12 @@ def execute_trip_background_job(trip_id):
             
             # Check results and update trip status
             if critical_failures:
-                _update_trip_execution_status(trip_id, 'failed', 'Trip execution failed due to critical errors')
+                error_details = '; '.join(critical_failures)
+                print(f"Critical failures detected: {error_details}")
+                _update_trip_execution_status(trip_id, 'failed', f'Trip execution failed due to critical errors: {error_details}')
                 trip.execution_status = 'failed'
                 db.session.commit()
-                raise Exception("Trip execution failed due to critical errors")
+                raise Exception(f"Trip execution failed due to critical errors: {error_details}")
             
             if failed_orders and successful_orders:
                 # Partial success
@@ -210,58 +215,117 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
     db.session.commit()
 
 def _process_order_manifest(trip_order, order_details, token):
-    """Process individual order manifest creation"""
+    """Process individual order manifest creation using original working pattern"""
     try:
+        print(f"Processing manifest for order {trip_order.order_id}")
+        
         # Extract order data
         order_data = order_details.get('order', {})
         dispensary_location = order_data.get('dispensary_location', {})
         customer = order_data.get('customer', {})
         
-        # Create sublot
-        sublot_data = {
-            'vendor_id': trip_order.biotrack_vendor_id,
-            'room_id': trip_order.default_biotrack_room_id,
-            'order_id': trip_order.order_id,
-            'customer_name': customer.get('name', 'Unknown Customer'),
-            'address': trip_order.address,
-            'city': dispensary_location.get('city', ''),
-            'state': dispensary_location.get('state', ''),
-            'zip_code': dispensary_location.get('zip_code', ''),
-            'phone': customer.get('phone', ''),
-            'email': customer.get('email', '')
-        }
+        print(f"Order data extracted - Customer: {customer.get('name', 'Unknown')}, Location: {dispensary_location.get('city', 'Unknown')}")
         
-        # Post sublot to BioTrack
-        sublot_result = post_sublot(token, sublot_data)
-        if not sublot_result.get('success'):
+        # Get line items for sublot creation (original working pattern)
+        line_items = order_details.get('line_items', [])
+        sublot_data = []
+        
+        for line_item in line_items:
+            barcode_id = line_item.get('barcode_id')  # batch_ref from LeafTrade
+            quantity = line_item.get('quantity', 1)
+            if barcode_id:
+                sublot_data.append({
+                    'barcodeid': barcode_id,
+                    'remove_quantity': str(quantity)
+                })
+        
+        if not sublot_data:
+            error_msg = f"No barcode IDs found for order {trip_order.order_id}"
+            print(f"Order processing failed: {error_msg}")
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
-                'error': f"Failed to create sublot: {sublot_result.get('error', 'Unknown error')}"
+                'error': 'No barcode IDs found in line items'
             }
         
-        # Create manifest
-        manifest_data = {
-            'sublot_id': sublot_result.get('sublot_id'),
-            'order_id': trip_order.order_id,
-            'driver1_id': trip_order.trip.driver1.biotrack_id,
-            'driver2_id': trip_order.trip.driver2.biotrack_id,
-            'vehicle_id': trip_order.trip.vehicle.biotrack_id
-        }
+        # Create sublots for this order (original working pattern)
+        print(f"Creating sublot for order {trip_order.order_id}")
+        from api.biotrack import post_sublot_bulk_create
+        sublot_result = post_sublot_bulk_create(token, sublot_data)
         
-        manifest_result = post_manifest(token, manifest_data)
-        if not manifest_result.get('success'):
+        # Check if sublot creation returned an error response
+        if isinstance(sublot_result, dict) and not sublot_result.get('success', True):
+            error_msg = f"BioTrack sublot creation failed for order {trip_order.order_id}: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
+            print(f"Sublot creation failed: {error_msg}")
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
-                'error': f"Failed to create manifest: {manifest_result.get('error', 'Unknown error')}"
+                'error': f"BioTrack Error: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
+            }
+        
+        new_barcode_ids = sublot_result
+        if not new_barcode_ids:
+            error_msg = f"No barcode IDs returned from sublot creation for order {trip_order.order_id}"
+            print(f"Order processing failed: {error_msg}")
+            return {
+                'order_id': trip_order.order_id,
+                'status': 'failed',
+                'error': 'No barcode IDs returned from sublot creation'
+            }
+        
+        # Move sublots to room (original working pattern)
+        print(f"Moving sublots to room for order {trip_order.order_id}")
+        move_data = []
+        for barcode_id in new_barcode_ids:
+            move_data.append({
+                'barcodeid': barcode_id,
+                'room': trip_order.default_biotrack_room_id or 'default_room'
+            })
+        
+        from api.biotrack import post_sublot_move
+        move_result = post_sublot_move(token, move_data)
+        if not move_result:
+            error_msg = f"Failed to move sublots to room for order {trip_order.order_id}"
+            print(f"Order processing failed: {error_msg}")
+            return {
+                'order_id': trip_order.order_id,
+                'status': 'failed',
+                'error': 'Failed to move sublots to room'
+            }
+        
+        # Create manifest (original working pattern)
+        print(f"Creating manifest for order {trip_order.order_id}")
+        manifest_data = {
+            'approximate_departure': int(datetime.now().timestamp()),
+            'approximate_arrival': int(datetime.now().timestamp()) + 3600,  # 1 hour later
+            'approximate_route': f"Route for order {trip_order.order_id}",
+            'stop_number': "1",
+            'barcodeid': new_barcode_ids,
+            'vendor_license': trip_order.biotrack_vendor_id or 'default_license'
+        }
+        
+        from api.biotrack import post_manifest
+        manifest_result = post_manifest(
+            token, 
+            manifest_data, 
+            [trip_order.trip.driver1.biotrack_id, trip_order.trip.driver2.biotrack_id],
+            trip_order.trip.vehicle.biotrack_id
+        )
+        
+        if not manifest_result:
+            error_msg = f"Failed to create manifest for order {trip_order.order_id}"
+            print(f"Manifest creation failed: {error_msg}")
+            return {
+                'order_id': trip_order.order_id,
+                'status': 'failed',
+                'error': 'Failed to create manifest'
             }
         
         return {
             'order_id': trip_order.order_id,
             'status': 'success',
-            'sublot_id': sublot_result.get('sublot_id'),
-            'manifest_id': manifest_result.get('manifest_id')
+            'sublot_ids': new_barcode_ids,
+            'manifest_id': manifest_result
         }
         
     except Exception as e:

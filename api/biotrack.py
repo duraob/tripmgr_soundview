@@ -825,6 +825,72 @@ def post_sublot_move(
         return None
 
 
+def post_sublot_bulk_create(
+    token: str, 
+    sublot_data: List[Dict[str, str]]
+) -> Optional[List[str]]:
+    """
+    Create inventory sublots in bulk using the original working pattern.
+    
+    Args:
+        token: Authentication token
+        sublot_data: List of dictionaries with "barcodeid" and "remove_quantity"
+    
+    Returns:
+        List of new barcode IDs or None if failed
+    """
+    if not validate_token(token):
+        return None
+    
+    if not sublot_data:
+        logger.error("Invalid sublot_data provided")
+        return None
+    
+    # Import training mode function from app
+    import sys
+    import os
+    sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+    from app import get_training_mode
+    
+    training = get_training_mode()
+    
+    # Validate sublot_data structure
+    for item in sublot_data:
+        if not isinstance(item, dict) or "barcodeid" not in item or "remove_quantity" not in item:
+            logger.error("Invalid sublot_data structure - each item must have 'barcodeid' and 'remove_quantity'")
+            return None
+    
+    data = {
+        "API": "4.0",
+        "action": "inventory_split",
+        "sessionid": token,
+        "sublot_id": "bulk_create",
+        "data": sublot_data,
+        "training": training
+    }
+    
+    try:
+        response_data = _make_api_request(data, "sublot_bulk_create")
+        
+        if response_data and str(response_data.get("success")) == "1":
+            sublot_ids = response_data.get("barcode_id", [])
+            logger.info(f"Successfully created {len(sublot_ids)} sublots in bulk")
+            return sublot_ids
+        else:
+            logger.error(f"Bulk sublot creation failed: {response_data}")
+            # Return the detailed error information for better user feedback
+            return {
+                'success': False,
+                'error': response_data.get('error', 'Unknown BioTrack error'),
+                'errorcode': response_data.get('errorcode', 'Unknown'),
+                'details': response_data
+            }
+            
+    except Exception as e:
+        logger.error(f"Failed to create bulk sublots: {e}")
+        return None
+
+
 def post_manifest(
     token: str,
     manifest_info: Dict[str, Any],
