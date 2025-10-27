@@ -216,25 +216,3 @@ class GlobalPreference(db.Model):
     preference_value = db.Column(db.Text, nullable=False)
     created_at = db.Column(db.DateTime, default=get_est_now)
     updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
-
-class ReportJob(db.Model):
-    """Report generation job tracking model"""
-    id = db.Column(db.Integer, primary_key=True)
-    job_id = db.Column(db.String(255), unique=True, nullable=False)  # RQ job ID
-    report_type = db.Column(db.String(50), nullable=False)  # 'inventory' or 'finished_goods'
-    status = db.Column(db.String(20), nullable=False)  # 'pending', 'processing', 'completed', 'failed'
-    file_path = db.Column(db.String(500), nullable=True)  # Path to generated CSV
-    filename = db.Column(db.String(255), nullable=True)  # User-friendly filename
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    completed_at = db.Column(db.DateTime, nullable=True)
-    error_message = db.Column(db.Text, nullable=True)
-    created_by_user_id = db.Column(db.Integer, db.ForeignKey('user.id'), nullable=False)  # Who initiated
-    progress_percentage = db.Column(db.Integer, default=0)
-    items_processed = db.Column(db.Integer, default=0)
-    total_items = db.Column(db.Integer, default=0)
-    
-    # Unique constraint to ensure only one active report per type globally
-    __table_args__ = (
-        db.UniqueConstraint('report_type', 'status', 
-                           name='unique_active_report_per_type'),
-    ) 

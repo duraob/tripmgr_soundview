@@ -5,7 +5,16 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Background Job Inventory Reports (Latest)
+### Unified Report Generation System (Latest)
+- **Consistent Architecture**: Report generation now uses same patterns as trip execution
+- **Task Queue Module**: Extended `utils/task_queue.py` to handle report generation consistently
+- **Cross-Platform Worker**: Simplified worker that works on both Windows and Ubuntu
+- **Job Timeouts**: Added proper 10-minute timeouts for report generation jobs
+- **Unified Error Handling**: Same error handling patterns as trip execution
+- **Flask App Context**: Proper Flask context handling in background jobs
+- **Production Ready**: Same reliability and patterns as working trip execution system
+
+### Background Job Inventory Reports (Previous)
 - **Background Processing**: Moved both inventory reports to background jobs to prevent timeout issues
 - **Global Storage**: Implemented global file storage with cleanup on completion (max 1 report per type)
 - **Timestamp Display**: Added timestamp display showing when reports were last generated
@@ -16,6 +25,10 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **UI Updates**: Updated config.html with status display, timestamps, and generation buttons
 - **API Endpoints**: New endpoints for generation, status checking, and file download
 - **Storage Structure**: Created `/storage/reports/` directory for global report files
+- **Visual Indicators**: Added comprehensive visual feedback for report generation status
+- **Progress Display**: Real-time progress updates with percentage and item counts
+- **Button States**: Dynamic button states showing generation progress and status
+- **Error Handling**: Clear error messages with visual indicators
 - **Production Ready**: Reports now process in background without blocking the UI
 
 ### Worker Flask Context Fix
@@ -183,6 +196,27 @@ The application is a Flask-based trip management system for cannabis delivery op
 3. **Worker Service**: Set up systemd service for background worker
 4. **Testing**: Test background job processing with real trip execution
 5. **Monitoring**: Set up monitoring for Redis and worker processes
+
+### Simplified Report Generation System (Latest)
+- **Clean Architecture**: Implemented simplified report generation system following .cursorrules
+- **New Module**: Created `utils/rpt_generation.py` with minimal, modular functions
+- **API Endpoints**: Added 6 new simplified endpoints for both inventory and finished goods reports
+- **Background Processing**: Integrated with existing RQ worker system
+- **Frontend UI**: Added clean, simple interface in config.html
+- **Status Tracking**: Simple status system using GlobalPreference (generating/ready/error)
+- **File Management**: Automatic cleanup and timestamped file storage
+- **Room Selection**: Persistent room selection for finished goods reports
+- **Code Reduction**: ~60% less code than previous complex system
+- **Production Ready**: Simple, maintainable, and reliable
+
+### Implementation Details
+- **Report Types**: Full inventory report and finished goods report with filtering
+- **Background Jobs**: Uses RQ worker with 'report_generation' queue
+- **Status System**: Simple 3-state system (generating/ready/error)
+- **File Storage**: `/storage/reports/` with automatic cleanup
+- **UI Features**: Real-time status updates, simple polling, clean interface
+- **Error Handling**: Clear error messages and status indicators
+- **Room Filtering**: Persistent room selection for finished goods reports
 
 ## Testing Instructions
 1. **Activate virtual environment**: `.\.venv\Scripts\Activate.ps1`

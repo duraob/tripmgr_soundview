@@ -2,11 +2,11 @@
 """
 RQ Worker for background job processing
 Run this in a separate terminal to process background jobs
+Unified approach - works on both Windows and Ubuntu like trip execution
 """
 
 import os
 import sys
-from rq import Worker
 from rq.worker import SimpleWorker
 from redis import Redis
 from dotenv import load_dotenv
@@ -24,23 +24,25 @@ def start_worker():
     redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     redis_conn = Redis.from_url(redis_url)
     
-    # Use SimpleWorker for Windows compatibility (no forking)
-    worker = SimpleWorker(['trip_execution'], connection=redis_conn)
-    
     # Clean up old failed jobs on startup
     print("Cleaning up old failed jobs...")
     try:
         from rq import Queue
-        queue = Queue('trip_execution', connection=redis_conn)
-        failed_count = len(queue.failed_job_registry)
-        if failed_count > 0:
-            for job_id in list(queue.failed_job_registry.get_job_ids()):
-                queue.failed_job_registry.remove(job_id)
-            print(f"Cleared {failed_count} old failed jobs")
-        else:
-            print("No old failed jobs to clean")
+        for queue_name in ['trip_execution', 'report_generation']:
+            queue = Queue(queue_name, connection=redis_conn)
+            failed_count = len(queue.failed_job_registry)
+            if failed_count > 0:
+                for job_id in list(queue.failed_job_registry.get_job_ids()):
+                    queue.failed_job_registry.remove(job_id)
+                print(f"Cleared {failed_count} old failed jobs from {queue_name}")
+            else:
+                print(f"No old failed jobs to clean from {queue_name}")
     except Exception as e:
         print(f"Warning: Could not clean old jobs: {e}")
+    
+    # Use SimpleWorker for both platforms (same as trip execution)
+    # SimpleWorker handles cross-platform compatibility automatically
+    worker = SimpleWorker(['trip_execution', 'report_generation'], connection=redis_conn)
     
     print("Starting RQ worker for background processing...")
     print("Press Ctrl+C to stop the worker")

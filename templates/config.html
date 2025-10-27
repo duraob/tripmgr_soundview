@@ -11,6 +11,8 @@
             <p class="mt-2 text-gray-600">Manage API data synchronization and system settings</p>
         </div>
 
+
+
         <!-- Inventory Report - Featured Section -->
         <div class="bg-gradient-to-r from-blue-50 to-indigo-50 border-2 border-blue-200 shadow-lg rounded-xl mb-8">
             <div class="px-6 py-4 border-b border-blue-200 bg-gradient-to-r from-blue-100 to-indigo-100 rounded-t-xl">
@@ -21,7 +23,7 @@
                         </svg>
                     </div>
                     <div class="ml-3">
-                        <h2 class="text-xl font-bold text-blue-900">📊 Inventory Report</h2>
+                        <h2 class="text-xl font-bold text-blue-900">📊 Full Inventory Report</h2>
                         <p class="text-sm text-blue-700 font-medium">Download comprehensive inventory data with lab test results</p>
                     </div>
                 </div>
@@ -35,19 +37,19 @@
                         
                         <!-- Report Status Display -->
                         <div class="mt-3">
-                            <div id="inventory-status" class="text-sm">
-                                <span id="inventory-status-text">Checking status...</span>
-                                <div id="inventory-timestamp" class="text-xs text-gray-500 mt-1"></div>
+                            <div id="simple-inventory-status" class="text-sm">
+                                <span id="simple-inventory-status-text">No report available</span>
+                                <div id="simple-inventory-timestamp" class="text-xs text-gray-500 mt-1"></div>
                             </div>
                         </div>
                         
                         <!-- Action Buttons -->
                         <div class="mt-4">
-                            <button id="inventory-generate-btn" onclick="generateInventoryReport()" 
+                            <button id="simple-inventory-generate-btn" onclick="generateSimpleInventoryReport()" 
                                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                                 🔄 Generate Report
                             </button>
-                            <button id="inventory-download-btn" onclick="downloadInventoryReport()" 
+                            <button id="simple-inventory-download-btn" onclick="downloadSimpleInventoryReport()" 
                                     class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors hidden">
                                 📥 Download Report
                             </button>
@@ -81,61 +83,67 @@
                         
                         <!-- Report Status Display -->
                         <div class="mt-3">
-                            <div id="finished-goods-status" class="text-sm">
-                                <span id="finished-goods-status-text">Checking status...</span>
-                                <div id="finished-goods-timestamp" class="text-xs text-gray-500 mt-1"></div>
+                            <div id="simple-finished-goods-status" class="text-sm">
+                                <span id="simple-finished-goods-status-text">No report available</span>
+                                <div id="simple-finished-goods-timestamp" class="text-xs text-gray-500 mt-1"></div>
                             </div>
                         </div>
                         
                         <!-- Action Buttons -->
                         <div class="mt-4">
-                            <button id="finished-goods-generate-btn" onclick="generateFinishedGoodsReport()" 
+                            <button id="simple-finished-goods-generate-btn" onclick="generateSimpleFinishedGoodsReport()" 
                                     class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors">
                                 🔄 Generate Report
                             </button>
-                            <button id="finished-goods-download-btn" onclick="downloadFinishedGoodsReport()" 
+                            <button id="simple-finished-goods-download-btn" onclick="downloadSimpleFinishedGoodsReport()" 
                                     class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded-md text-sm font-medium transition-colors hidden">
                                 📥 Download Report
                             </button>
                         </div>
                     </div>
                 </div>
-            </div>
-        </div>
-
-        <!-- Room Selection Settings - Connected to Finished Goods Report -->
-        <div class="bg-white shadow rounded-lg mb-8">
-            <div class="px-6 py-4 border-b border-gray-200">
-                <h2 class="text-xl font-semibold text-gray-900">Finished Goods Report Settings</h2>
-                <p class="text-sm text-gray-600 mt-1">Configure which rooms to include in the finished goods report</p>
-            </div>
-            
-            <div class="p-6">
-                <!-- Room Selection -->
-                <div class="mb-6">
-                    <h3 class="text-lg font-semibold text-gray-900 mb-4">Select Rooms to Include</h3>
-                    <div id="room-selection" class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
-                        <!-- Room checkboxes will be populated by JavaScript -->
-                    </div>
-                    <div class="mt-4 flex space-x-2">
-                        <button onclick="selectAllRooms()" class="text-sm text-blue-600 hover:text-blue-800 font-medium">Select All</button>
-                        <button onclick="clearAllRooms()" class="text-sm text-gray-600 hover:text-gray-800 font-medium">Clear All</button>
-                        <button onclick="refreshRoomList()" class="text-sm text-green-600 hover:text-green-800 font-medium">🔄 Refresh Rooms</button>
-                        <button onclick="saveRoomSelection()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-sm font-medium transition-colors">
-                            💾 Save Selection
+                
+                <!-- Concise Room Selection -->
+                <div class="mt-6 pt-4 border-t border-green-200">
+                    <div class="flex items-center justify-between mb-3">
+                        <div class="flex items-center space-x-2">
+                            <h4 class="text-sm font-medium text-gray-700">Room Filter</h4>
+                            <span id="room-count-badge" class="px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full">
+                                <span id="selected-room-count">0</span> selected
+                            </span>
+                        </div>
+                        <button onclick="toggleRoomSelection()" id="room-toggle-btn" 
+                                class="text-sm text-green-600 hover:text-green-800 font-medium flex items-center space-x-1">
+                            <span>Configure Rooms</span>
+                            <svg id="room-toggle-icon" class="w-4 h-4 transform transition-transform" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 9l-7 7-7-7" />
+                            </svg>
                         </button>
                     </div>
-                </div>
-                
-                <!-- Report Info -->
-                <div class="p-4 bg-green-50 border border-green-200 rounded-md">
-                    <h4 class="font-medium text-green-800 mb-2">Report Includes:</h4>
-                    <ul class="text-sm text-green-700 space-y-1">
-                        <li>• QA Passed items only (lab data available)</li>
-                        <li>• Finished goods product types: Edibles, Extracts, Topicals, Usable Marijuana, Capsules, Tinctures, Patches, Suppositories, Lozenges, Pills, RSO</li>
-                        <li>• Only items from selected rooms</li>
-                        <li>• Complete lab test results (THC, CBD, etc.)</li>
-                    </ul>
+                    
+                    <!-- Collapsible Room Selection -->
+                    <div id="room-selection-panel" class="hidden">
+                        <div id="room-selection" class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-2 mb-3">
+                            <!-- Room checkboxes will be populated by JavaScript -->
+                        </div>
+                        <div class="flex items-center justify-between">
+                            <div class="flex space-x-2">
+                                <button onclick="selectAllRooms()" class="text-xs text-blue-600 hover:text-blue-800 font-medium">Select All</button>
+                                <button onclick="clearAllRooms()" class="text-xs text-gray-600 hover:text-gray-800 font-medium">Clear All</button>
+                                <button onclick="refreshRoomList()" class="text-xs text-green-600 hover:text-green-800 font-medium">🔄 Refresh</button>
+                            </div>
+                            <button onclick="saveRoomSelection()" class="bg-green-600 hover:bg-green-700 text-white px-3 py-1 rounded text-xs font-medium transition-colors">
+                                💾 Save
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- Quick Info -->
+                    <div class="mt-3 p-3 bg-green-50 border border-green-200 rounded-md">
+                        <p class="text-xs text-green-700">
+                            <span class="font-medium">Includes:</span> QA-passed finished goods (Edibles, Extracts, Topicals, etc.) from selected rooms only
+                        </p>
+                    </div>
                 </div>
             </div>
         </div>
@@ -483,6 +491,9 @@ document.addEventListener('DOMContentLoaded', function() {
     document.getElementById('refresh-customers').addEventListener('click', function() {
         refreshData('customers');
     });
+    
+    // Load simplified report status on page load
+    checkSimpleReportStatus();
 });
 
 function refreshBiotrackData() {
@@ -685,158 +696,7 @@ function exportData(type) {
     window.location.href = `/api/${type}/export`;
 }
 
-// Check reports status on page load
-async function checkReportsStatus() {
-    try {
-        const response = await fetch('/api/reports/status');
-        const data = await response.json();
-        
-        updateInventoryReportUI(data.inventory);
-        updateFinishedGoodsReportUI(data.finished_goods);
-    } catch (error) {
-        console.error('Error checking reports status:', error);
-    }
-}
 
-// Update inventory report UI based on status
-function updateInventoryReportUI(inventoryData) {
-    const statusText = document.getElementById('inventory-status-text');
-    const timestampDiv = document.getElementById('inventory-timestamp');
-    const generateBtn = document.getElementById('inventory-generate-btn');
-    const downloadBtn = document.getElementById('inventory-download-btn');
-    
-    if (inventoryData.status === 'completed' && inventoryData.download_available) {
-        statusText.textContent = 'Report ready for download';
-        statusText.className = 'text-sm text-green-600';
-        timestampDiv.textContent = `Last generated: ${formatTimestamp(inventoryData.last_generated)}`;
-        generateBtn.classList.add('hidden');
-        downloadBtn.classList.remove('hidden');
-    } else if (inventoryData.status === 'processing') {
-        statusText.textContent = 'Report is being generated...';
-        statusText.className = 'text-sm text-blue-600';
-        timestampDiv.textContent = '';
-        generateBtn.disabled = true;
-        generateBtn.textContent = '⏳ Generating...';
-        downloadBtn.classList.add('hidden');
-    } else {
-        statusText.textContent = 'No report available';
-        statusText.className = 'text-sm text-gray-500';
-        timestampDiv.textContent = '';
-        generateBtn.disabled = false;
-        generateBtn.textContent = '🔄 Generate Report';
-        downloadBtn.classList.add('hidden');
-    }
-}
-
-// Update finished goods report UI based on status
-function updateFinishedGoodsReportUI(finishedGoodsData) {
-    const statusText = document.getElementById('finished-goods-status-text');
-    const timestampDiv = document.getElementById('finished-goods-timestamp');
-    const generateBtn = document.getElementById('finished-goods-generate-btn');
-    const downloadBtn = document.getElementById('finished-goods-download-btn');
-    
-    if (finishedGoodsData.status === 'completed' && finishedGoodsData.download_available) {
-        statusText.textContent = 'Report ready for download';
-        statusText.className = 'text-sm text-green-600';
-        timestampDiv.textContent = `Last generated: ${formatTimestamp(finishedGoodsData.last_generated)}`;
-        generateBtn.classList.add('hidden');
-        downloadBtn.classList.remove('hidden');
-    } else if (finishedGoodsData.status === 'processing') {
-        statusText.textContent = 'Report is being generated...';
-        statusText.className = 'text-sm text-blue-600';
-        timestampDiv.textContent = '';
-        generateBtn.disabled = true;
-        generateBtn.textContent = '⏳ Generating...';
-        downloadBtn.classList.add('hidden');
-    } else {
-        statusText.textContent = 'No report available';
-        statusText.className = 'text-sm text-gray-500';
-        timestampDiv.textContent = '';
-        generateBtn.disabled = false;
-        generateBtn.textContent = '🔄 Generate Report';
-        downloadBtn.classList.add('hidden');
-    }
-}
-
-// Generate inventory report
-async function generateInventoryReport() {
-    try {
-        const response = await fetch('/api/inventory-report/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            // Start polling for status updates
-            pollReportStatus('inventory', data.job_id);
-        } else {
-            alert('Error: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Error generating inventory report:', error);
-        alert('Error generating report');
-    }
-}
-
-// Generate finished goods report
-async function generateFinishedGoodsReport() {
-    try {
-        const response = await fetch('/api/finished-goods-report/generate', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' }
-        });
-        const data = await response.json();
-        
-        if (data.success) {
-            // Start polling for status updates
-            pollReportStatus('finished_goods', data.job_id);
-        } else {
-            alert('Error: ' + data.error);
-        }
-    } catch (error) {
-        console.error('Error generating finished goods report:', error);
-        alert('Error generating report');
-    }
-}
-
-// Poll for report status updates
-async function pollReportStatus(reportType, jobId) {
-    const pollInterval = setInterval(async () => {
-        try {
-            const response = await fetch(`/api/report-jobs/${jobId}/status`);
-            const data = await response.json();
-            
-            if (data.status === 'completed') {
-                clearInterval(pollInterval);
-                checkReportsStatus(); // Refresh status
-            } else if (data.status === 'failed') {
-                clearInterval(pollInterval);
-                alert('Report generation failed: ' + data.error_message);
-                checkReportsStatus(); // Refresh status
-            }
-        } catch (error) {
-            console.error('Error polling report status:', error);
-        }
-    }, 2000); // Poll every 2 seconds
-}
-
-// Download inventory report
-function downloadInventoryReport() {
-    window.location.href = '/api/inventory-report/download';
-}
-
-// Download finished goods report
-function downloadFinishedGoodsReport() {
-    window.location.href = '/api/finished-goods-report/download';
-}
-
-// Format timestamp for display
-function formatTimestamp(timestamp) {
-    if (!timestamp) return '';
-    const date = new Date(timestamp);
-    return date.toLocaleString();
-}
 
 // Internal Contacts Management
 let currentEditingContactId = null;
@@ -847,9 +707,6 @@ document.addEventListener('DOMContentLoaded', function() {
     
     // Set up form submission
     document.getElementById('internalContactForm').addEventListener('submit', handleInternalContactSubmit);
-    
-    // Check reports status on page load
-    checkReportsStatus();
 });
 
 // Finished Goods Report Functions
@@ -882,7 +739,7 @@ async function loadRoomSelection() {
                            value="${room.id}" 
                            ${isSelected ? 'checked' : ''}
                            class="rounded border-gray-300 text-green-600 focus:ring-green-500"
-                           onchange="markAsUnsaved()">
+                           onchange="updateRoomCount(); markAsUnsaved();">
                     <label for="room-${room.id}" class="text-sm text-gray-700">${room.name}</label>
                 `;
                 roomContainer.appendChild(checkbox);
@@ -890,9 +747,13 @@ async function loadRoomSelection() {
         } else {
             roomContainer.innerHTML = '<p class="text-gray-500 text-sm">No rooms available. Please refresh BioTrack data first.</p>';
         }
+        
+        // Update room count after loading
+        updateRoomCount();
     } catch (error) {
         console.error('Error loading room selection:', error);
         document.getElementById('room-selection').innerHTML = '<p class="text-red-500 text-sm">Error loading rooms</p>';
+        updateRoomCount();
     }
 }
 
@@ -939,17 +800,15 @@ async function saveRoomSelection() {
 function selectAllRooms() {
     const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = true);
-    // Update status to show unsaved changes
-    document.getElementById('finished-goods-status').textContent = 'Changes not saved - click Save Selection';
-    document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
+    updateRoomCount();
+    markAsUnsaved();
 }
 
 function clearAllRooms() {
     const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]');
     checkboxes.forEach(cb => cb.checked = false);
-    // Update status to show unsaved changes
-    document.getElementById('finished-goods-status').textContent = 'Changes not saved - click Save Selection';
-    document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
+    updateRoomCount();
+    markAsUnsaved();
 }
 
 function refreshRoomList() {
@@ -962,6 +821,35 @@ function markAsUnsaved() {
     document.getElementById('finished-goods-status').className = 'text-sm text-orange-600';
 }
 
+function toggleRoomSelection() {
+    const panel = document.getElementById('room-selection-panel');
+    const icon = document.getElementById('room-toggle-icon');
+    const btn = document.getElementById('room-toggle-btn');
+    
+    if (panel.classList.contains('hidden')) {
+        panel.classList.remove('hidden');
+        icon.classList.add('rotate-180');
+        btn.querySelector('span').textContent = 'Hide Rooms';
+    } else {
+        panel.classList.add('hidden');
+        icon.classList.remove('rotate-180');
+        btn.querySelector('span').textContent = 'Configure Rooms';
+    }
+}
+
+function updateRoomCount() {
+    const checkboxes = document.querySelectorAll('#room-selection input[type="checkbox"]:checked');
+    const count = checkboxes.length;
+    document.getElementById('selected-room-count').textContent = count;
+    
+    // Update badge color based on count
+    const badge = document.getElementById('room-count-badge');
+    if (count === 0) {
+        badge.className = 'px-2 py-1 text-xs bg-gray-100 text-gray-600 rounded-full';
+    } else {
+        badge.className = 'px-2 py-1 text-xs bg-green-100 text-green-800 rounded-full';
+    }
+}
 
 function loadInternalContacts() {
     fetch('/api/internal-contacts')
@@ -1101,6 +989,248 @@ function deleteInternalContact(contactId) {
 }
 
 function showMessage(message, type) {
+    // Create a simple toast notification
+    const toast = document.createElement('div');
+    toast.className = `fixed top-4 right-4 px-6 py-3 rounded-md text-white z-50 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;
+    toast.textContent = message;
+    document.body.appendChild(toast);
+    
+    setTimeout(() => {
+        document.body.removeChild(toast);
+    }, 3000);
+}
+
+// Simplified Report Generation Functions
+
+async function checkSimpleReportStatus() {
+    try {
+        // Check inventory report status
+        const inventoryResponse = await fetch('/api/inventory-report/status-simple');
+        const inventoryData = await inventoryResponse.json();
+        updateSimpleInventoryUI(inventoryData);
+        
+        // Check finished goods report status
+        const finishedGoodsResponse = await fetch('/api/finished-goods-report/status-simple');
+        const finishedGoodsData = await finishedGoodsResponse.json();
+        updateSimpleFinishedGoodsUI(finishedGoodsData);
+    } catch (error) {
+        console.error('Error checking simple report status:', error);
+    }
+}
+
+function updateSimpleInventoryUI(data) {
+    const statusText = document.getElementById('simple-inventory-status-text');
+    const timestampDiv = document.getElementById('simple-inventory-timestamp');
+    const generateBtn = document.getElementById('simple-inventory-generate-btn');
+    const downloadBtn = document.getElementById('simple-inventory-download-btn');
+    
+    if (data.status === 'ready' && data.download_available) {
+        statusText.textContent = '✅ Report ready for download';
+        statusText.className = 'text-sm text-green-600';
+        timestampDiv.textContent = `Last generated: ${formatSimpleTimestamp(data.timestamp)}`;
+        generateBtn.classList.add('hidden');
+        downloadBtn.classList.remove('hidden');
+    } else if (data.status === 'generating') {
+        statusText.textContent = '🔄 Report is being generated...';
+        statusText.className = 'text-sm text-blue-600';
+        timestampDiv.textContent = '';
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Generating...';
+        generateBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+        downloadBtn.classList.add('hidden');
+    } else {
+        statusText.textContent = '📊 No report available';
+        statusText.className = 'text-sm text-gray-600';
+        timestampDiv.textContent = '';
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Generate Report';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        downloadBtn.classList.add('hidden');
+    }
+}
+
+function updateSimpleFinishedGoodsUI(data) {
+    const statusText = document.getElementById('simple-finished-goods-status-text');
+    const timestampDiv = document.getElementById('simple-finished-goods-timestamp');
+    const generateBtn = document.getElementById('simple-finished-goods-generate-btn');
+    const downloadBtn = document.getElementById('simple-finished-goods-download-btn');
+    
+    if (data.status === 'ready' && data.download_available) {
+        statusText.textContent = '✅ Report ready for download';
+        statusText.className = 'text-sm text-green-600';
+        timestampDiv.textContent = `Last generated: ${formatSimpleTimestamp(data.timestamp)}`;
+        generateBtn.classList.add('hidden');
+        downloadBtn.classList.remove('hidden');
+    } else if (data.status === 'generating') {
+        statusText.textContent = '🔄 Report is being generated...';
+        statusText.className = 'text-sm text-blue-600';
+        timestampDiv.textContent = '';
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Generating...';
+        generateBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+        downloadBtn.classList.add('hidden');
+    } else {
+        statusText.textContent = '📊 No report available';
+        statusText.className = 'text-sm text-gray-600';
+        timestampDiv.textContent = '';
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Generate Report';
+        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        downloadBtn.classList.add('hidden');
+    }
+}
+
+async function generateSimpleInventoryReport() {
+    const generateBtn = document.getElementById('simple-inventory-generate-btn');
+    const statusText = document.getElementById('simple-inventory-status-text');
+    
+    try {
+        // Update button state immediately
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Starting...';
+        generateBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+        
+        // Update status display
+        statusText.textContent = '🚀 Starting report generation...';
+        statusText.className = 'text-sm text-blue-600';
+        
+        const response = await fetch('/api/inventory-report/generate-simple', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            statusText.textContent = '🔄 Report generation started...';
+            statusText.className = 'text-sm text-blue-600';
+            generateBtn.textContent = '⏳ Generating...';
+            
+            // Start simple polling
+            pollSimpleInventoryStatus();
+        } else {
+            // Reset button on error
+            generateBtn.disabled = false;
+            generateBtn.textContent = '🔄 Generate Report';
+            generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+            statusText.textContent = '❌ Error: ' + data.error;
+            statusText.className = 'text-sm text-red-600';
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error generating inventory report:', error);
+        
+        // Reset button on error
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Generate Report';
+        generateBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        statusText.textContent = '❌ Error generating report';
+        statusText.className = 'text-sm text-red-600';
+        showToast('Error generating report', 'error');
+    }
+}
+
+async function generateSimpleFinishedGoodsReport() {
+    const generateBtn = document.getElementById('simple-finished-goods-generate-btn');
+    const statusText = document.getElementById('simple-finished-goods-status-text');
+    
+    try {
+        // Update button state immediately
+        generateBtn.disabled = true;
+        generateBtn.textContent = '⏳ Starting...';
+        generateBtn.className = 'bg-gray-400 text-white px-4 py-2 rounded text-sm font-medium cursor-not-allowed';
+        
+        // Update status display
+        statusText.textContent = '🚀 Starting report generation...';
+        statusText.className = 'text-sm text-blue-600';
+        
+        const response = await fetch('/api/finished-goods-report/generate-simple', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' }
+        });
+        const data = await response.json();
+        
+        if (data.success) {
+            statusText.textContent = '🔄 Report generation started...';
+            statusText.className = 'text-sm text-blue-600';
+            generateBtn.textContent = '⏳ Generating...';
+            
+            // Start simple polling
+            pollSimpleFinishedGoodsStatus();
+        } else {
+            // Reset button on error
+            generateBtn.disabled = false;
+            generateBtn.textContent = '🔄 Generate Report';
+            generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+            statusText.textContent = '❌ Error: ' + data.error;
+            statusText.className = 'text-sm text-red-600';
+            showToast('Error: ' + data.error, 'error');
+        }
+    } catch (error) {
+        console.error('Error generating finished goods report:', error);
+        
+        // Reset button on error
+        generateBtn.disabled = false;
+        generateBtn.textContent = '🔄 Generate Report';
+        generateBtn.className = 'bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded text-sm font-medium transition-colors';
+        statusText.textContent = '❌ Error generating report';
+        statusText.className = 'text-sm text-red-600';
+        showToast('Error generating report', 'error');
+    }
+}
+
+function pollSimpleInventoryStatus() {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/inventory-report/status-simple');
+            const data = await response.json();
+            updateSimpleInventoryUI(data);
+            
+            if (data.status === 'ready' || data.status === 'error') {
+                clearInterval(interval);
+            }
+        } catch (error) {
+            console.error('Error polling inventory status:', error);
+            clearInterval(interval);
+        }
+    }, 3000); // Poll every 3 seconds
+}
+
+function pollSimpleFinishedGoodsStatus() {
+    const interval = setInterval(async () => {
+        try {
+            const response = await fetch('/api/finished-goods-report/status-simple');
+            const data = await response.json();
+            updateSimpleFinishedGoodsUI(data);
+            
+            if (data.status === 'ready' || data.status === 'error') {
+                clearInterval(interval);
+            }
+        } catch (error) {
+            console.error('Error polling finished goods status:', error);
+            clearInterval(interval);
+        }
+    }, 3000); // Poll every 3 seconds
+}
+
+function downloadSimpleInventoryReport() {
+    window.location.href = '/api/inventory-report/download-simple';
+}
+
+function downloadSimpleFinishedGoodsReport() {
+    window.location.href = '/api/finished-goods-report/download-simple';
+}
+
+function formatSimpleTimestamp(timestamp) {
+    if (!timestamp) return '';
+    try {
+        const date = new Date(timestamp);
+        return date.toLocaleString();
+    } catch (error) {
+        return timestamp;
+    }
+}
+
+function showToast(message, type) {
     // Create a simple toast notification
     const toast = document.createElement('div');
     toast.className = `fixed top-4 right-4 px-6 py-3 rounded-md text-white z-50 ${type === 'success' ? 'bg-green-500' : 'bg-red-500'}`;

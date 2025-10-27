@@ -30,8 +30,50 @@ def enqueue_trip_execution(trip_id):
     )
     return job.id
 
+def get_report_queue():
+    """Get report generation queue"""
+    redis_conn = get_redis_connection()
+    return Queue('report_generation', connection=redis_conn)
+
+def enqueue_inventory_report():
+    """Enqueue inventory report generation job"""
+    import platform
+    queue = get_report_queue()
+    
+    # Disable timeout on Windows to avoid signal issues
+    if platform.system() == 'Windows':
+        job = queue.enqueue(
+            'utils.rpt_generation.generate_inventory_report_simple'
+            # No timeout on Windows
+        )
+    else:
+        job = queue.enqueue(
+            'utils.rpt_generation.generate_inventory_report_simple',
+            job_timeout='10m'  # 10 minute timeout for report generation
+        )
+    return job.id
+
+def enqueue_finished_goods_report():
+    """Enqueue finished goods report generation job"""
+    import platform
+    queue = get_report_queue()
+    
+    # Disable timeout on Windows to avoid signal issues
+    if platform.system() == 'Windows':
+        job = queue.enqueue(
+            'utils.rpt_generation.generate_finished_goods_report_simple'
+            # No timeout on Windows
+        )
+    else:
+        job = queue.enqueue(
+            'utils.rpt_generation.generate_finished_goods_report_simple',
+            job_timeout='10m'  # 10 minute timeout for report generation
+        )
+    return job.id
+
 def get_job_status(job_id):
     """Get job status"""
+    # Try trip execution queue first
     queue = get_trip_queue()
     job = queue.fetch_job(job_id)
     if job:
@@ -40,4 +82,15 @@ def get_job_status(job_id):
             'result': job.result,
             'error': str(job.exc_info) if job.exc_info else None
         }
+    
+    # Try report generation queue
+    queue = get_report_queue()
+    job = queue.fetch_job(job_id)
+    if job:
+        return {
+            'status': job.get_status(),
+            'result': job.result,
+            'error': str(job.exc_info) if job.exc_info else None
+        }
+    
     return None
