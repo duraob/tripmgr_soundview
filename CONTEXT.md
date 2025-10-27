@@ -25,6 +25,15 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Minimal Code**: Following .cursorrules - minimal changes, simple solution, no over-engineering
 - **Production Ready**: Trip execution now follows original working methodology with background worker compatibility
 
+### Database Schema Fix (Latest)
+- **Room ID Issue**: Fixed `TripOrder` model attribute error - `default_biotrack_room_id` doesn't exist
+- **Location Mapping**: Updated to get room ID from `LocationMapping` table via `dispensary_location_id`
+- **Vendor ID Issue**: Fixed `TripOrder` model attribute error - `biotrack_vendor_id` doesn't exist
+- **Vendor Mapping**: Updated to get vendor ID from `LocationMapping` table via `dispensary_location_id`
+- **Fallback Logic**: Added proper fallback logic for room and vendor IDs
+- **Room Override**: Added support for `trip_order.room_override` field
+- **Error Resolution**: Fixed "TripOrder object has no attribute 'default_biotrack_room_id'" error
+
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export
 - **Enhanced Data Export**: Mappings export now includes vendor names for better readability

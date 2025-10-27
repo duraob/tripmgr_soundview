@@ -273,13 +273,27 @@ def _process_order_manifest(trip_order, order_details, token):
                 'error': 'No barcode IDs returned from sublot creation'
             }
         
+        # Get room ID from location mapping
+        from models import LocationMapping
+        dispensary_location_id = order_data.get('dispensary_location', {}).get('id')
+        room_id = 'default_room'  # Default fallback
+        
+        if dispensary_location_id:
+            location_mapping = db.session.query(LocationMapping).filter_by(
+                leaftrade_dispensary_location_id=dispensary_location_id
+            ).first()
+            if location_mapping and location_mapping.default_biotrack_room_id:
+                room_id = location_mapping.default_biotrack_room_id
+            elif trip_order.room_override:
+                room_id = trip_order.room_override
+        
         # Move sublots to room (original working pattern)
         print(f"Moving sublots to room for order {trip_order.order_id}")
         move_data = []
         for barcode_id in new_barcode_ids:
             move_data.append({
                 'barcodeid': barcode_id,
-                'room': trip_order.default_biotrack_room_id or 'default_room'
+                'room': room_id
             })
         
         from api.biotrack import post_sublot_move
@@ -293,6 +307,16 @@ def _process_order_manifest(trip_order, order_details, token):
                 'error': 'Failed to move sublots to room'
             }
         
+        # Get vendor ID from location mapping
+        vendor_license = 'default_license'  # Default fallback
+        
+        if dispensary_location_id:
+            location_mapping = db.session.query(LocationMapping).filter_by(
+                leaftrade_dispensary_location_id=dispensary_location_id
+            ).first()
+            if location_mapping and location_mapping.biotrack_vendor_id:
+                vendor_license = location_mapping.biotrack_vendor_id
+        
         # Create manifest (original working pattern)
         print(f"Creating manifest for order {trip_order.order_id}")
         manifest_data = {
@@ -301,7 +325,7 @@ def _process_order_manifest(trip_order, order_details, token):
             'approximate_route': f"Route for order {trip_order.order_id}",
             'stop_number': "1",
             'barcodeid': new_barcode_ids,
-            'vendor_license': trip_order.biotrack_vendor_id or 'default_license'
+            'vendor_license': vendor_license
         }
         
         from api.biotrack import post_manifest
