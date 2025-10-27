@@ -3370,6 +3370,7 @@ def download_inventory_report():
         from io import StringIO
         import csv
         from datetime import datetime
+        import time
         
         # Authenticate with BioTrack
         logger.debug("Attempting to authenticate with BioTrack")
@@ -3405,10 +3406,21 @@ def download_inventory_report():
             'THC %', 'CBDA %', 'CBD %'
         ])
         
-        # Process inventory items
+        # Process inventory items with progress logging
         items_processed = 0
-        for item_id, item_info in inventory_data.items():
+        items_with_lab_data = 0
+        items_without_lab_data = 0
+        start_time = time.time()
+        
+        logger.info(f"Processing {len(inventory_data)} inventory items for CSV generation")
+        
+        for i, (item_id, item_info) in enumerate(inventory_data.items()):
             try:
+                # Log progress every 50 items
+                if i % 50 == 0:
+                    elapsed = time.time() - start_time
+                    logger.info(f"Processing item {i+1}/{len(inventory_data)} (elapsed: {elapsed:.1f}s)")
+                
                 # Get room name - use correct field name from BioTrack response
                 current_room_id = str(item_info.get('currentroom', ''))
                 current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
@@ -3419,7 +3431,6 @@ def download_inventory_report():
                 
                 if barcode_id:
                     try:
-                        logger.debug(f"Attempting QA check for barcode: {barcode_id}")
                         lab_results = get_inventory_qa_check(token, barcode_id)
                     except Exception as e:
                         logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
@@ -3433,6 +3444,7 @@ def download_inventory_report():
                     thc_pct = lab_results.get('thc', '')
                     cbda_pct = lab_results.get('cbda', '')
                     cbd_pct = lab_results.get('cbd', '')
+                    items_with_lab_data += 1
                 else:
                     lab_data_available = 'No'
                     total_pct = ''
@@ -3440,6 +3452,7 @@ def download_inventory_report():
                     thc_pct = ''
                     cbda_pct = ''
                     cbd_pct = ''
+                    items_without_lab_data += 1
                 
                 # Write row - use correct field names from BioTrack response
                 writer.writerow([
@@ -3468,7 +3481,10 @@ def download_inventory_report():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'inventory_report_{timestamp}.csv'
         
-        logger.info(f"Generated inventory report CSV: {items_processed} items")
+        total_time = time.time() - start_time
+        logger.info(f"Generated inventory report CSV: {items_processed} items "
+                   f"({items_with_lab_data} with lab data, {items_without_lab_data} without), "
+                   f"processed in {total_time:.1f}s")
         
         from flask import Response
         return Response(
