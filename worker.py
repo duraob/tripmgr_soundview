@@ -18,6 +18,9 @@ load_dotenv()
 
 def start_worker():
     """Start RQ worker for background processing"""
+    # Import Flask app to ensure proper context
+    from app import app
+    
     redis_url = os.getenv('REDIS_URL', 'redis://localhost:6379/0')
     redis_conn = Redis.from_url(redis_url)
     

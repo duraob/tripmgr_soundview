@@ -55,22 +55,6 @@ sudo systemctl start redis-server
 redis-cli ping  # Should return "PONG"
 ```
 
-**Production (Docker):**
-```yaml
-# docker-compose.yml
-version: '3.8'
-services:
-  redis:
-    image: redis:7-alpine
-    ports:
-      - "6379:6379"
-    volumes:
-      - redis_data:/data
-
-volumes:
-  redis_data:
-```
-
 ### 3. Environment Configuration
 
 Create `.env` file:

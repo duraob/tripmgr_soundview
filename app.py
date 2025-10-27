@@ -1698,22 +1698,28 @@ def export_mappings():
     try:
         from io import StringIO
         import csv
+        from models import Vendor
         
-        mappings = db.session.query(LocationMapping).join(Customer).all()
+        # Join LocationMapping with Customer and Vendor tables
+        mappings = db.session.query(LocationMapping, Customer, Vendor).join(
+            Customer, LocationMapping.customer_id == Customer.id
+        ).outerjoin(
+            Vendor, LocationMapping.biotrack_vendor_id == Vendor.biotrack_vendor_id
+        ).all()
         
         output = StringIO()
         writer = csv.writer(output)
         
         # Write header
-        writer.writerow(['Customer Name', 'Customer Location', 'BioTrack Vendor ID', 'Default Room', 'Status'])
+        writer.writerow(['Customer Name', 'Customer Location', 'BioTrack Vendor ID', 'Vendor Name', 'Default Room', 'Status'])
         
         # Write data
-        for mapping in mappings:
-            customer = mapping.customer
+        for mapping, customer, vendor in mappings:
             writer.writerow([
                 customer.customer_name,
                 customer.name,
                 mapping.biotrack_vendor_id,
+                vendor.name if vendor else 'Unknown Vendor',
                 mapping.default_biotrack_room_id or '',
                 'Active' if mapping.is_active else 'Inactive'
             ])

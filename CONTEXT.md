@@ -5,7 +5,23 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Redis Worker Status Process Implementation (Latest)
+### Worker Flask Context Fix (Latest)
+- **Application Context**: Fixed Flask application context issue in background worker
+- **Minimal Changes**: Updated only necessary files following .cursorrules principles
+- **Worker Fix**: Added `from app import app` and `with app.app_context():` to worker.py
+- **Trip Execution Fix**: Wrapped entire trip execution function in Flask app context
+- **Production Ready**: Worker now properly accesses database within Flask context
+- **Error Resolution**: Fixed "Working outside of application context" RuntimeError
+
+### Mappings Export Enhancement
+- **Vendor Name Integration**: Added vendor names to mappings CSV export
+- **Enhanced Data Export**: Mappings export now includes vendor names for better readability
+- **Database Join**: Modified export query to join LocationMapping with Vendor table
+- **CSV Format**: Updated CSV header to include "Vendor Name" column
+- **Fallback Handling**: Shows "Unknown Vendor" for mappings without vendor data
+- **API Endpoint**: `/api/mapping/export` now returns enhanced CSV with vendor information
+
+### Redis Worker Status Process Implementation
 - **Background Job Processing**: Implemented Redis + RQ for non-blocking trip execution
 - **Real-time Progress Tracking**: Users can monitor trip execution progress in real-time
 - **Production Ready**: Configured for Digital Ocean deployment with Redis server
