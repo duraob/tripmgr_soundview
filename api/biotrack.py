@@ -896,7 +896,7 @@ def post_manifest(
     manifest_info: Dict[str, Any],
     drivers: Union[str, List[str]],
     vehicle: str,
-    location: str = "ACME0008473"
+    location: str = "ACFB0000681"
 ) -> Optional[Dict[str, Any]]:
     """
     Create inventory manifest in BioTrack.

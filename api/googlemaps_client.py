@@ -51,7 +51,7 @@ class GoogleMapsClient:
         self.retry_delay = 1  # seconds
         
         # Origin address (warehouse)
-        self.origin_address = "47 Lower Main St, Portland, CT"
+        self.origin_address = "159 E Main St, Bristol, CT, 06010"
         
         logger.info("Google Maps API client initialized successfully")
     
