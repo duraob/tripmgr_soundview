@@ -3206,6 +3206,7 @@ def download_finished_goods_report():
         from io import StringIO
         import csv
         from datetime import datetime
+        import time
         
         # Authenticate with BioTrack
         logger.debug("Attempting to authenticate with BioTrack")
@@ -3223,6 +3224,8 @@ def download_finished_goods_report():
             logger.error("Failed to retrieve inventory data from BioTrack")
             return jsonify({'error': 'Failed to retrieve inventory data'}), 500
         
+        logger.info(f"Retrieved {len(inventory_data)} inventory items from BioTrack")
+        
         # Get room data for room name lookup
         logger.debug("Calling BioTrack API to fetch rooms")
         room_data = get_room_info(token)
@@ -3236,8 +3239,28 @@ def download_finished_goods_report():
         if preference:
             selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
         
+        logger.info(f"Selected rooms for filtering: {selected_rooms}")
+        
         # Define finished goods inventory types
         finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+        
+        # Pre-filter items to reduce processing time
+        logger.debug("Pre-filtering inventory items")
+        pre_filtered_items = []
+        for item_id, item_info in inventory_data.items():
+            # Filter by selected rooms
+            current_room_id = str(item_info.get('currentroom', ''))
+            if selected_rooms and current_room_id not in selected_rooms:
+                continue
+            
+            # Filter by inventory type
+            inventory_type = item_info.get('inventorytype')
+            if inventory_type not in finished_goods_types:
+                continue
+            
+            pre_filtered_items.append((item_id, item_info))
+        
+        logger.info(f"Pre-filtered to {len(pre_filtered_items)} items matching room and type criteria")
         
         # Create CSV content
         output = StringIO()
@@ -3250,27 +3273,21 @@ def download_finished_goods_report():
             'THC %', 'CBDA %', 'CBD %'
         ])
         
-        # Process inventory items with filtering
+        # Process pre-filtered inventory items
         items_processed = 0
-        filtered_by_room = 0
-        filtered_by_type = 0
-        filtered_by_lab = 0
+        items_with_lab_data = 0
+        items_without_lab_data = 0
+        start_time = time.time()
         
-        for item_id, item_info in inventory_data.items():
+        for i, (item_id, item_info) in enumerate(pre_filtered_items):
             try:
-                # Filter by selected rooms
-                current_room_id = str(item_info.get('currentroom', ''))
-                if selected_rooms and current_room_id not in selected_rooms:
-                    filtered_by_room += 1
-                    continue
-                
-                # Filter by inventory type
-                inventory_type = item_info.get('inventorytype')
-                if inventory_type not in finished_goods_types:
-                    filtered_by_type += 1
-                    continue
+                # Log progress every 50 items
+                if i % 50 == 0:
+                    elapsed = time.time() - start_time
+                    logger.info(f"Processing item {i+1}/{len(pre_filtered_items)} (elapsed: {elapsed:.1f}s)")
                 
                 # Get room name
+                current_room_id = str(item_info.get('currentroom', ''))
                 current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
                 
                 # Try to get lab data for this item
@@ -3284,13 +3301,14 @@ def download_finished_goods_report():
                         logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
                         lab_results = None
                 
-                # Filter by lab data availability
+                # Only include items with lab data (QA passed)
                 if not lab_results:
-                    filtered_by_lab += 1
+                    items_without_lab_data += 1
                     continue
                 
+                items_with_lab_data += 1
+                
                 # Extract lab data
-                lab_data_available = 'Yes' if lab_results else 'No'
                 total_pct = lab_results.get('total', '') if lab_results else ''
                 thca_pct = lab_results.get('thca', '') if lab_results else ''
                 thc_pct = lab_results.get('thc', '') if lab_results else ''
@@ -3300,12 +3318,12 @@ def download_finished_goods_report():
                 # Write row - use correct field names from BioTrack response
                 writer.writerow([
                     str(item_id),
-                    item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
-                    item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
+                    item_info.get('productname', 'Unknown Product'),
+                    item_info.get('remaining_quantity', 0),
                     current_room_id,
                     current_room_name,
-                    inventory_type,
-                    lab_data_available,
+                    item_info.get('inventorytype'),
+                    'Yes',  # Lab data available
                     total_pct,
                     thca_pct,
                     thc_pct,
@@ -3325,7 +3343,9 @@ def download_finished_goods_report():
         timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
         filename = f'finished_goods_report_{timestamp}.csv'
         
-        logger.info(f"Generated finished goods report CSV: {items_processed} items")
+        total_time = time.time() - start_time
+        logger.info(f"Generated finished goods report CSV: {items_processed} items with lab data, "
+                   f"{items_without_lab_data} filtered out, processed in {total_time:.1f}s")
         
         from flask import Response
         return Response(
@@ -3501,6 +3521,116 @@ def test_qa_check(barcode_id):
     except Exception as e:
         logger.error(f"Error testing QA check: {str(e)}")
         return jsonify({'error': f'Error testing QA check: {str(e)}'}), 500
+
+@app.route('/api/finished-goods-report/test')
+@login_required
+def test_finished_goods_report():
+    """Test endpoint to debug finished goods report without CSV generation"""
+    logger = logging.getLogger('app.finished_goods_report_test')
+    logger.info("Testing finished goods report data retrieval")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
+        import time
+        
+        # Authenticate with BioTrack
+        logger.debug("Attempting to authenticate with BioTrack")
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        logger.debug("Successfully authenticated with BioTrack")
+        
+        # Get inventory data
+        logger.debug("Calling BioTrack API to fetch inventory")
+        inventory_data = get_inventory_info(token)
+        if not inventory_data:
+            logger.error("Failed to retrieve inventory data from BioTrack")
+            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        
+        logger.info(f"Retrieved {len(inventory_data)} inventory items from BioTrack")
+        
+        # Get room data for room name lookup
+        logger.debug("Calling BioTrack API to fetch rooms")
+        room_data = get_room_info(token)
+        room_lookup = {}
+        if room_data:
+            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        
+        # Get selected rooms from preferences
+        selected_rooms = []
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if preference:
+            selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
+        
+        # Define finished goods inventory types
+        finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+        
+        # Pre-filter items to reduce processing time
+        logger.debug("Pre-filtering inventory items")
+        pre_filtered_items = []
+        for item_id, item_info in inventory_data.items():
+            # Filter by selected rooms
+            current_room_id = str(item_info.get('currentroom', ''))
+            if selected_rooms and current_room_id not in selected_rooms:
+                continue
+            
+            # Filter by inventory type
+            inventory_type = item_info.get('inventorytype')
+            if inventory_type not in finished_goods_types:
+                continue
+            
+            pre_filtered_items.append((item_id, item_info))
+        
+        logger.info(f"Pre-filtered to {len(pre_filtered_items)} items matching room and type criteria")
+        
+        # Test a few items for lab data
+        test_items = []
+        start_time = time.time()
+        
+        for i, (item_id, item_info) in enumerate(pre_filtered_items[:10]):  # Test first 10 items
+            try:
+                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
+                lab_results = None
+                
+                if barcode_id:
+                    try:
+                        lab_results = get_inventory_qa_check(token, barcode_id)
+                    except Exception as e:
+                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
+                        lab_results = None
+                
+                test_items.append({
+                    'item_id': str(item_id),
+                    'product_name': item_info.get('productname', 'Unknown Product'),
+                    'inventory_type': item_info.get('inventorytype'),
+                    'current_room': str(item_info.get('currentroom', '')),
+                    'barcode_id': barcode_id,
+                    'has_lab_data': lab_results is not None,
+                    'lab_results': lab_results
+                })
+                
+            except Exception as e:
+                logger.warning(f"Error processing test item {item_id}: {str(e)}")
+                continue
+        
+        total_time = time.time() - start_time
+        
+        return jsonify({
+            'success': True,
+            'total_inventory_items': len(inventory_data),
+            'pre_filtered_items': len(pre_filtered_items),
+            'selected_rooms': selected_rooms,
+            'test_items_processed': len(test_items),
+            'test_items': test_items,
+            'processing_time_seconds': round(total_time, 2),
+            'message': 'Test completed successfully'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error testing finished goods report: {str(e)}")
+        return jsonify({'error': f'Failed to test finished goods report: {str(e)}'}), 500
 
 
 @app.route('/help')
