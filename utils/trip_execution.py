@@ -370,6 +370,11 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
                 'error': 'Failed to create manifest'
             }
         
+        # Store manifest ID in database (following reference implementation)
+        trip_order.manifest_id = str(manifest_result)
+        db.session.commit()
+        print(f"Stored manifest ID {manifest_result} for order {trip_order.order_id}")
+        
         return {
             'order_id': trip_order.order_id,
             'status': 'success',

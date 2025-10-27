@@ -207,4 +207,12 @@ class TripExecution(db.Model):
     job_id = db.Column(db.String(100))  # RQ job ID
     created_at = db.Column(db.DateTime, default=get_est_now)
     updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
-    completed_at = db.Column(db.DateTime) 
+    completed_at = db.Column(db.DateTime)
+
+class GlobalPreference(db.Model):
+    """Global preferences model for system-wide settings"""
+    id = db.Column(db.Integer, primary_key=True)
+    preference_key = db.Column(db.String(255), unique=True, nullable=False)
+    preference_value = db.Column(db.Text, nullable=False)
+    created_at = db.Column(db.DateTime, default=get_est_now)
+    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now) 

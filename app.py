@@ -153,7 +153,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Import models and get db instance
-from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, InternalContact
+from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, InternalContact, GlobalPreference
 
 # Initialize extensions
 migrate = Migrate(app, db)
@@ -2794,6 +2794,161 @@ def delete_internal_contact(contact_id):
         logger.error(f"Error deleting internal contact: {e}")
         return jsonify({'error': str(e)}), 500
 
+# Global Preferences API endpoints
+@app.route('/api/global-preferences')
+@login_required
+def get_global_preferences():
+    """Get all global preferences"""
+    try:
+        preferences = GlobalPreference.query.all()
+        preferences_dict = {pref.preference_key: pref.preference_value for pref in preferences}
+        return jsonify({'success': True, 'preferences': preferences_dict})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences/<preference_key>')
+@login_required
+def get_global_preference(preference_key):
+    """Get specific global preference"""
+    try:
+        preference = GlobalPreference.query.filter_by(preference_key=preference_key).first()
+        if not preference:
+            return jsonify({'error': 'Preference not found'}), 404
+        return jsonify({'success': True, 'preference_key': preference.preference_key, 'preference_value': preference.preference_value})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences', methods=['POST'])
+@login_required
+def create_global_preference():
+    """Create new global preference"""
+    try:
+        data = request.get_json()
+        preference_key = data.get('preference_key')
+        preference_value = data.get('preference_value')
+        
+        if not preference_key or preference_value is None:
+            return jsonify({'error': 'preference_key and preference_value are required'}), 400
+        
+        # Check if preference already exists
+        existing = GlobalPreference.query.filter_by(preference_key=preference_key).first()
+        if existing:
+            return jsonify({'error': 'Preference already exists'}), 400
+        
+        preference = GlobalPreference(
+            preference_key=preference_key,
+            preference_value=preference_value
+        )
+        db.session.add(preference)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Preference created successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences/<preference_key>', methods=['PUT'])
+@login_required
+def update_global_preference(preference_key):
+    """Update existing global preference"""
+    try:
+        data = request.get_json()
+        preference_value = data.get('preference_value')
+        
+        if preference_value is None:
+            return jsonify({'error': 'preference_value is required'}), 400
+        
+        preference = GlobalPreference.query.filter_by(preference_key=preference_key).first()
+        if not preference:
+            return jsonify({'error': 'Preference not found'}), 404
+        
+        preference.preference_value = preference_value
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Preference updated successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences/<preference_key>', methods=['DELETE'])
+@login_required
+def delete_global_preference(preference_key):
+    """Delete global preference"""
+    try:
+        preference = GlobalPreference.query.filter_by(preference_key=preference_key).first()
+        if not preference:
+            return jsonify({'error': 'Preference not found'}), 404
+        
+        db.session.delete(preference)
+        db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Preference deleted successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+# Room Selection Management API endpoints
+@app.route('/api/global-preferences/rooms')
+@login_required
+def get_selected_rooms():
+    """Get selected rooms for finished goods report"""
+    try:
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if not preference:
+            return jsonify({'success': True, 'selected_rooms': []})
+        
+        # Parse comma-separated room IDs
+        selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
+        return jsonify({'success': True, 'selected_rooms': selected_rooms})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences/rooms', methods=['POST'])
+@login_required
+def save_selected_rooms():
+    """Save selected rooms for finished goods report"""
+    try:
+        data = request.get_json()
+        selected_rooms = data.get('selected_rooms', [])
+        
+        if not isinstance(selected_rooms, list):
+            return jsonify({'error': 'selected_rooms must be a list'}), 400
+        
+        # Convert to comma-separated string
+        rooms_string = ','.join(str(room_id) for room_id in selected_rooms)
+        
+        # Update or create preference
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if preference:
+            preference.preference_value = rooms_string
+        else:
+            preference = GlobalPreference(
+                preference_key='finished_goods_rooms',
+                preference_value=rooms_string
+            )
+            db.session.add(preference)
+        
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Room selections saved successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/global-preferences/rooms', methods=['DELETE'])
+@login_required
+def clear_selected_rooms():
+    """Clear selected rooms for finished goods report"""
+    try:
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if preference:
+            db.session.delete(preference)
+            db.session.commit()
+        
+        return jsonify({'success': True, 'message': 'Room selections cleared successfully'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/contacts')
 @login_required
 def contacts():
@@ -2908,6 +3063,280 @@ def get_inventory_report():
         logger.error(f"Error generating inventory report: {str(e)}")
         return jsonify({'error': f'Failed to generate inventory report: {str(e)}'}), 500
 
+@app.route('/api/finished-goods-report')
+@login_required
+def get_finished_goods_report():
+    """Get finished goods inventory report with filtering"""
+    logger = logging.getLogger('app.finished_goods_report')
+    logger.info("Generating finished goods inventory report")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
+        
+        # Authenticate with BioTrack
+        logger.debug("Attempting to authenticate with BioTrack")
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        logger.debug("Successfully authenticated with BioTrack")
+        
+        # Get inventory data
+        logger.debug("Calling BioTrack API to fetch inventory")
+        inventory_data = get_inventory_info(token)
+        if not inventory_data:
+            logger.error("Failed to retrieve inventory data from BioTrack")
+            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        
+        # Get room data for room name lookup
+        logger.debug("Calling BioTrack API to fetch rooms")
+        room_data = get_room_info(token)
+        room_lookup = {}
+        if room_data:
+            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        
+        # Get selected rooms from preferences
+        selected_rooms = []
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if preference:
+            selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
+        
+        # Define finished goods inventory types
+        finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+        
+        # Process inventory items with filtering
+        inventory_items = []
+        items_with_lab_data = 0
+        items_without_lab_data = 0
+        filtered_by_room = 0
+        filtered_by_type = 0
+        filtered_by_lab = 0
+        
+        for item_id, item_info in inventory_data.items():
+            try:
+                # Filter by selected rooms
+                current_room_id = str(item_info.get('currentroom', ''))
+                if selected_rooms and current_room_id not in selected_rooms:
+                    filtered_by_room += 1
+                    continue
+                
+                # Filter by inventory type
+                inventory_type = item_info.get('inventorytype')
+                if inventory_type not in finished_goods_types:
+                    filtered_by_type += 1
+                    continue
+                
+                # Get room name
+                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
+                
+                # Try to get lab data for this item
+                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
+                lab_results = None
+                
+                if barcode_id:
+                    try:
+                        logger.debug(f"Attempting QA check for barcode: {barcode_id}")
+                        lab_results = get_inventory_qa_check(token, barcode_id)
+                        if lab_results:
+                            logger.debug(f"Found lab data for barcode {barcode_id}: {lab_results}")
+                        else:
+                            logger.debug(f"No lab data found for barcode {barcode_id}")
+                    except Exception as e:
+                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
+                        lab_results = None
+                
+                # Filter by lab data availability
+                if not lab_results:
+                    filtered_by_lab += 1
+                    continue
+                
+                # Create inventory item entry
+                inventory_item = {
+                    'item_id': str(item_id),
+                    'product_name': item_info.get('name', 'Unknown Product'),
+                    'quantity': item_info.get('quantity', 0),
+                    'current_room_id': current_room_id,
+                    'current_room_name': current_room_name,
+                    'barcode_id': barcode_id,
+                    'inventory_type': inventory_type,
+                    'lab_results': lab_results
+                }
+                
+                items_with_lab_data += 1
+                inventory_items.append(inventory_item)
+                
+            except Exception as e:
+                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
+                continue
+        
+        # Create summary
+        summary = {
+            'total_items': len(inventory_items),
+            'items_with_lab_data': items_with_lab_data,
+            'items_without_lab_data': items_without_lab_data,
+            'filtered_by_room': filtered_by_room,
+            'filtered_by_type': filtered_by_type,
+            'filtered_by_lab': filtered_by_lab,
+            'selected_rooms': selected_rooms
+        }
+        
+        logger.info(f"Generated finished goods report: {summary['total_items']} items, "
+                   f"{summary['items_with_lab_data']} with lab data")
+        
+        return jsonify({
+            'success': True,
+            'inventory_items': inventory_items,
+            'summary': summary
+        })
+        
+    except Exception as e:
+        logger.error(f"Failed to generate finished goods report: {str(e)}")
+        return jsonify({'error': f'Failed to generate finished goods report: {str(e)}'}), 500
+
+@app.route('/api/finished-goods-report/download')
+@login_required
+def download_finished_goods_report():
+    """Download finished goods report as CSV file"""
+    logger = logging.getLogger('app.finished_goods_report_download')
+    logger.info("Generating downloadable finished goods report")
+    
+    try:
+        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
+        from io import StringIO
+        import csv
+        from datetime import datetime
+        
+        # Authenticate with BioTrack
+        logger.debug("Attempting to authenticate with BioTrack")
+        token = get_auth_token()
+        if not token:
+            logger.error("Failed to authenticate with BioTrack API")
+            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        
+        logger.debug("Successfully authenticated with BioTrack")
+        
+        # Get inventory data
+        logger.debug("Calling BioTrack API to fetch inventory")
+        inventory_data = get_inventory_info(token)
+        if not inventory_data:
+            logger.error("Failed to retrieve inventory data from BioTrack")
+            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        
+        # Get room data for room name lookup
+        logger.debug("Calling BioTrack API to fetch rooms")
+        room_data = get_room_info(token)
+        room_lookup = {}
+        if room_data:
+            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        
+        # Get selected rooms from preferences
+        selected_rooms = []
+        preference = GlobalPreference.query.filter_by(preference_key='finished_goods_rooms').first()
+        if preference:
+            selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
+        
+        # Define finished goods inventory types
+        finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+        
+        # Create CSV content
+        output = StringIO()
+        writer = csv.writer(output)
+        
+        # Write header
+        writer.writerow([
+            'Item ID (Text)', 'Product Name', 'Quantity', 'Current Room ID (Text)', 
+            'Current Room Name', 'Inventory Type', 'Lab Data Available', 'Total %', 'THCA %', 
+            'THC %', 'CBDA %', 'CBD %'
+        ])
+        
+        # Process inventory items with filtering
+        items_processed = 0
+        filtered_by_room = 0
+        filtered_by_type = 0
+        filtered_by_lab = 0
+        
+        for item_id, item_info in inventory_data.items():
+            try:
+                # Filter by selected rooms
+                current_room_id = str(item_info.get('currentroom', ''))
+                if selected_rooms and current_room_id not in selected_rooms:
+                    filtered_by_room += 1
+                    continue
+                
+                # Filter by inventory type
+                inventory_type = item_info.get('inventorytype')
+                if inventory_type not in finished_goods_types:
+                    filtered_by_type += 1
+                    continue
+                
+                # Get room name
+                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
+                
+                # Try to get lab data for this item
+                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
+                lab_results = None
+                
+                if barcode_id:
+                    try:
+                        lab_results = get_inventory_qa_check(token, barcode_id)
+                    except Exception as e:
+                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
+                        lab_results = None
+                
+                # Filter by lab data availability
+                if not lab_results:
+                    filtered_by_lab += 1
+                    continue
+                
+                # Extract lab data
+                lab_data_available = 'Yes' if lab_results else 'No'
+                total_pct = lab_results.get('total', '') if lab_results else ''
+                thca_pct = lab_results.get('thca', '') if lab_results else ''
+                thc_pct = lab_results.get('thc', '') if lab_results else ''
+                cbda_pct = lab_results.get('cbda', '') if lab_results else ''
+                cbd_pct = lab_results.get('cbd', '') if lab_results else ''
+                
+                # Write row
+                writer.writerow([
+                    str(item_id),
+                    item_info.get('name', 'Unknown Product'),
+                    item_info.get('quantity', 0),
+                    current_room_id,
+                    current_room_name,
+                    inventory_type,
+                    lab_data_available,
+                    total_pct,
+                    thca_pct,
+                    thc_pct,
+                    cbda_pct,
+                    cbd_pct
+                ])
+                
+                items_processed += 1
+                
+            except Exception as e:
+                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
+                continue
+        
+        output.seek(0)
+        
+        # Generate filename with timestamp
+        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        filename = f'finished_goods_report_{timestamp}.csv'
+        
+        logger.info(f"Generated finished goods report CSV: {items_processed} items")
+        
+        from flask import Response
+        return Response(
+            output.getvalue(),
+            mimetype='text/csv',
+            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        )
+        
+    except Exception as e:
+        logger.error(f"Error generating finished goods report CSV: {str(e)}")
+        return jsonify({'error': f'Failed to generate finished goods report: {str(e)}'}), 500
 
 @app.route('/api/inventory-report/download')
 @login_required

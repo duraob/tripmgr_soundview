@@ -52,6 +52,24 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Reference Alignment**: Now matches reference implementation pattern for route data usage
 - **Minimal Changes**: Following .cursorrules - updated only manifest creation logic
 
+### Manifest ID Storage (Current)
+- **Database Storage**: Added manifest ID storage in `trip_order.manifest_id` field
+- **Database Commit**: Added `db.session.commit()` after storing manifest ID
+- **Frontend Display**: Manifest IDs now persist and display on trip detail page
+- **Reference Alignment**: Matches reference implementation pattern for manifest ID storage
+- **Debug Logging**: Added logging to confirm manifest ID storage
+- **Minimal Code**: Following .cursorrules - added only 3 lines for database storage
+
+### Finished Goods Report (Latest)
+- **Global Preferences**: Added GlobalPreference model for system-wide settings
+- **Room Selection**: Users can select which rooms to include in finished goods report
+- **Product Type Filtering**: Filters by finished goods inventory types (22,23,24,25,28,34,35,36,37,38,39,45)
+- **QA Passed Filtering**: Only includes items with lab data available
+- **CSV Export**: Downloadable CSV with complete lab test results
+- **Persistent Settings**: Room selections persist across sessions
+- **UI Integration**: Added to config page with room selection checkboxes
+- **Minimal Code**: Following .cursorrules - reused existing patterns, ~250 lines total
+
 ### Mappings Export Enhancement
 - **Vendor Name Integration**: Added vendor names to mappings CSV export
 - **Enhanced Data Export**: Mappings export now includes vendor names for better readability
