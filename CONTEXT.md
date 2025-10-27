@@ -5,7 +5,20 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Worker Flask Context Fix (Latest)
+### Background Job Inventory Reports (Latest)
+- **Background Processing**: Moved both inventory reports to background jobs to prevent timeout issues
+- **Global Storage**: Implemented global file storage with cleanup on completion (max 1 report per type)
+- **Timestamp Display**: Added timestamp display showing when reports were last generated
+- **Generation → Download Workflow**: Clear two-step process: generate then download
+- **ReportJob Model**: Added database model for tracking report generation jobs
+- **Status Tracking**: Real-time status updates with progress percentage and item counts
+- **File Management**: Automatic cleanup of old reports when new ones complete
+- **UI Updates**: Updated config.html with status display, timestamps, and generation buttons
+- **API Endpoints**: New endpoints for generation, status checking, and file download
+- **Storage Structure**: Created `/storage/reports/` directory for global report files
+- **Production Ready**: Reports now process in background without blocking the UI
+
+### Worker Flask Context Fix
 - **Application Context**: Fixed Flask application context issue in background worker
 - **Minimal Changes**: Updated only necessary files following .cursorrules principles
 - **Worker Fix**: Added `from app import app` and `with app.app_context():` to worker.py

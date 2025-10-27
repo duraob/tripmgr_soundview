@@ -153,7 +153,7 @@ app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 # Import models and get db instance
-from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, InternalContact, GlobalPreference
+from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, InternalContact, GlobalPreference, ReportJob, TripExecution
 
 # Initialize extensions
 migrate = Migrate(app, db)
@@ -3194,44 +3194,46 @@ def get_finished_goods_report():
         logger.error(f"Failed to generate finished goods report: {str(e)}")
         return jsonify({'error': f'Failed to generate finished goods report: {str(e)}'}), 500
 
-@app.route('/api/finished-goods-report/download')
+@app.route('/api/finished-goods-report/generate', methods=['POST'])
 @login_required
-def download_finished_goods_report():
-    """Download finished goods report as CSV file"""
-    logger = logging.getLogger('app.finished_goods_report_download')
-    logger.info("Generating downloadable finished goods report")
+def generate_finished_goods_report():
+    """Start background job for finished goods report generation"""
+    logger = logging.getLogger('app.finished_goods_report_generate')
+    logger.info("Starting finished goods report generation job")
     
     try:
-        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
-        from io import StringIO
-        import csv
-        from datetime import datetime
-        import time
+        from rq import Queue
+        from redis import Redis
+        import uuid
         
-        # Authenticate with BioTrack
-        logger.debug("Attempting to authenticate with BioTrack")
-        token = get_auth_token()
-        if not token:
-            logger.error("Failed to authenticate with BioTrack API")
-            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        # Check if finished goods report is already being generated
+        existing_job = ReportJob.query.filter_by(
+            report_type='finished_goods',
+            status='processing'
+        ).first()
         
-        logger.debug("Successfully authenticated with BioTrack")
+        if existing_job:
+            return jsonify({
+                'success': True,
+                'message': 'Finished goods report is already being generated',
+                'job_id': existing_job.job_id,
+                'status': existing_job.status
+            })
         
-        # Get inventory data
-        logger.debug("Calling BioTrack API to fetch inventory")
-        inventory_data = get_inventory_info(token)
-        if not inventory_data:
-            logger.error("Failed to retrieve inventory data from BioTrack")
-            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
+        # Check if completed report exists
+        completed_job = ReportJob.query.filter_by(
+            report_type='finished_goods',
+            status='completed'
+        ).first()
         
-        logger.info(f"Retrieved {len(inventory_data)} inventory items from BioTrack")
-        
-        # Get room data for room name lookup
-        logger.debug("Calling BioTrack API to fetch rooms")
-        room_data = get_room_info(token)
-        room_lookup = {}
-        if room_data:
-            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
+        if completed_job:
+            return jsonify({
+                'success': True,
+                'message': 'Finished goods report is already available',
+                'job_id': completed_job.job_id,
+                'status': completed_job.status,
+                'last_generated': completed_job.completed_at.isoformat() if completed_job.completed_at else None
+            })
         
         # Get selected rooms from preferences
         selected_rooms = []
@@ -3239,263 +3241,253 @@ def download_finished_goods_report():
         if preference:
             selected_rooms = [room_id.strip() for room_id in preference.preference_value.split(',') if room_id.strip()]
         
-        logger.info(f"Selected rooms for filtering: {selected_rooms}")
+        # Create new job record
+        job_id = str(uuid.uuid4())
+        job = ReportJob(
+            job_id=job_id,
+            report_type='finished_goods',
+            status='pending',
+            created_by_user_id=current_user.id
+        )
+        db.session.add(job)
+        db.session.commit()
         
-        # Define finished goods inventory types
-        finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+        # Queue background job
+        redis_conn = Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379'))
+        q = Queue('trip_execution', connection=redis_conn)
         
-        # Pre-filter items to reduce processing time
-        logger.debug("Pre-filtering inventory items")
-        pre_filtered_items = []
-        for item_id, item_info in inventory_data.items():
-            # Filter by selected rooms
-            current_room_id = str(item_info.get('currentroom', ''))
-            if selected_rooms and current_room_id not in selected_rooms:
-                continue
-            
-            # Filter by inventory type
-            inventory_type = item_info.get('inventorytype')
-            if inventory_type not in finished_goods_types:
-                continue
-            
-            pre_filtered_items.append((item_id, item_info))
+        from utils.report_generation import generate_finished_goods_report_background
+        q.enqueue(generate_finished_goods_report_background, job_id, current_user.id, selected_rooms)
         
-        logger.info(f"Pre-filtered to {len(pre_filtered_items)} items matching room and type criteria")
+        logger.info(f"Queued finished goods report generation job {job_id}")
         
-        # Create CSV content
-        output = StringIO()
-        writer = csv.writer(output)
+        return jsonify({
+            'success': True,
+            'message': 'Finished goods report generation started',
+            'job_id': job_id,
+            'status': 'pending'
+        })
         
-        # Write header
-        writer.writerow([
-            'Item ID (Text)', 'Product Name', 'Quantity', 'Current Room ID (Text)', 
-            'Current Room Name', 'Inventory Type', 'Lab Data Available', 'Total %', 'THCA %', 
-            'THC %', 'CBDA %', 'CBD %'
-        ])
+    except Exception as e:
+        logger.error(f"Error starting finished goods report generation: {str(e)}")
+        return jsonify({'error': f'Failed to start finished goods report generation: {str(e)}'}), 500
+
+@app.route('/api/finished-goods-report/download')
+@login_required
+def download_finished_goods_report():
+    """Download current finished goods report file"""
+    logger = logging.getLogger('app.finished_goods_report_download')
+    
+    try:
+        # Find completed finished goods report
+        job = ReportJob.query.filter_by(
+            report_type='finished_goods',
+            status='completed'
+        ).order_by(ReportJob.completed_at.desc()).first()
         
-        # Process pre-filtered inventory items
-        items_processed = 0
-        items_with_lab_data = 0
-        items_without_lab_data = 0
-        start_time = time.time()
+        if not job or not job.file_path:
+            return jsonify({'error': 'No finished goods report available'}), 404
         
-        for i, (item_id, item_info) in enumerate(pre_filtered_items):
-            try:
-                # Log progress every 50 items
-                if i % 50 == 0:
-                    elapsed = time.time() - start_time
-                    logger.info(f"Processing item {i+1}/{len(pre_filtered_items)} (elapsed: {elapsed:.1f}s)")
-                
-                # Get room name
-                current_room_id = str(item_info.get('currentroom', ''))
-                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
-                
-                # Try to get lab data for this item
-                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
-                lab_results = None
-                
-                if barcode_id:
-                    try:
-                        lab_results = get_inventory_qa_check(token, barcode_id)
-                    except Exception as e:
-                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
-                        lab_results = None
-                
-                # Only include items with lab data (QA passed)
-                if not lab_results:
-                    items_without_lab_data += 1
-                    continue
-                
-                items_with_lab_data += 1
-                
-                # Extract lab data
-                total_pct = lab_results.get('total', '') if lab_results else ''
-                thca_pct = lab_results.get('thca', '') if lab_results else ''
-                thc_pct = lab_results.get('thc', '') if lab_results else ''
-                cbda_pct = lab_results.get('cbda', '') if lab_results else ''
-                cbd_pct = lab_results.get('cbd', '') if lab_results else ''
-                
-                # Write row - use correct field names from BioTrack response
-                writer.writerow([
-                    str(item_id),
-                    item_info.get('productname', 'Unknown Product'),
-                    item_info.get('remaining_quantity', 0),
-                    current_room_id,
-                    current_room_name,
-                    item_info.get('inventorytype'),
-                    'Yes',  # Lab data available
-                    total_pct,
-                    thca_pct,
-                    thc_pct,
-                    cbda_pct,
-                    cbd_pct
-                ])
-                
-                items_processed += 1
-                
-            except Exception as e:
-                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
-                continue
-        
-        output.seek(0)
+        # Check if file exists
+        if not os.path.exists(job.file_path):
+            return jsonify({'error': 'Report file not found'}), 404
         
         # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = job.completed_at.strftime('%Y%m%d_%H%M%S') if job.completed_at else 'latest'
         filename = f'finished_goods_report_{timestamp}.csv'
         
-        total_time = time.time() - start_time
-        logger.info(f"Generated finished goods report CSV: {items_processed} items with lab data, "
-                   f"{items_without_lab_data} filtered out, processed in {total_time:.1f}s")
-        
-        from flask import Response
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        from flask import send_file
+        return send_file(
+            job.file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
         )
         
     except Exception as e:
-        logger.error(f"Error generating finished goods report CSV: {str(e)}")
-        return jsonify({'error': f'Failed to generate finished goods report: {str(e)}'}), 500
+        logger.error(f"Error downloading finished goods report: {str(e)}")
+        return jsonify({'error': f'Failed to download finished goods report: {str(e)}'}), 500
+
+@app.route('/api/inventory-report/generate', methods=['POST'])
+@login_required
+def generate_inventory_report():
+    """Start background job for inventory report generation"""
+    logger = logging.getLogger('app.inventory_report_generate')
+    logger.info("Starting inventory report generation job")
+    
+    try:
+        from rq import Queue
+        from redis import Redis
+        import uuid
+        
+        # Check if inventory report is already being generated
+        existing_job = ReportJob.query.filter_by(
+            report_type='inventory',
+            status='processing'
+        ).first()
+        
+        if existing_job:
+            return jsonify({
+                'success': True,
+                'message': 'Inventory report is already being generated',
+                'job_id': existing_job.job_id,
+                'status': existing_job.status
+            })
+        
+        # Check if completed report exists
+        completed_job = ReportJob.query.filter_by(
+            report_type='inventory',
+            status='completed'
+        ).first()
+        
+        if completed_job:
+            return jsonify({
+                'success': True,
+                'message': 'Inventory report is already available',
+                'job_id': completed_job.job_id,
+                'status': completed_job.status,
+                'last_generated': completed_job.completed_at.isoformat() if completed_job.completed_at else None
+            })
+        
+        # Create new job record
+        job_id = str(uuid.uuid4())
+        job = ReportJob(
+            job_id=job_id,
+            report_type='inventory',
+            status='pending',
+            created_by_user_id=current_user.id
+        )
+        db.session.add(job)
+        db.session.commit()
+        
+        # Queue background job
+        redis_conn = Redis.from_url(os.getenv('REDIS_URL', 'redis://localhost:6379'))
+        q = Queue('trip_execution', connection=redis_conn)
+        
+        from utils.report_generation import generate_inventory_report_background
+        q.enqueue(generate_inventory_report_background, job_id, current_user.id)
+        
+        logger.info(f"Queued inventory report generation job {job_id}")
+        
+        return jsonify({
+            'success': True,
+            'message': 'Inventory report generation started',
+            'job_id': job_id,
+            'status': 'pending'
+        })
+        
+    except Exception as e:
+        logger.error(f"Error starting inventory report generation: {str(e)}")
+        return jsonify({'error': f'Failed to start inventory report generation: {str(e)}'}), 500
 
 @app.route('/api/inventory-report/download')
 @login_required
 def download_inventory_report():
-    """Download inventory report as CSV file"""
+    """Download current inventory report file"""
     logger = logging.getLogger('app.inventory_report_download')
-    logger.info("Generating downloadable inventory report")
     
     try:
-        from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
-        from io import StringIO
-        import csv
-        from datetime import datetime
-        import time
+        # Find completed inventory report
+        job = ReportJob.query.filter_by(
+            report_type='inventory',
+            status='completed'
+        ).order_by(ReportJob.completed_at.desc()).first()
         
-        # Authenticate with BioTrack
-        logger.debug("Attempting to authenticate with BioTrack")
-        token = get_auth_token()
-        if not token:
-            logger.error("Failed to authenticate with BioTrack API")
-            return jsonify({'error': 'Failed to authenticate with BioTrack API'}), 500
+        if not job or not job.file_path:
+            return jsonify({'error': 'No inventory report available'}), 404
         
-        logger.debug("Successfully authenticated with BioTrack")
-        
-        # Get inventory data
-        logger.debug("Calling BioTrack API to fetch inventory")
-        inventory_data = get_inventory_info(token)
-        if not inventory_data:
-            logger.error("Failed to retrieve inventory data from BioTrack")
-            return jsonify({'error': 'Failed to retrieve inventory data'}), 500
-        
-        # Get room data for room name lookup
-        logger.debug("Calling BioTrack API to fetch rooms")
-        room_data = get_room_info(token)
-        room_lookup = {}
-        if room_data:
-            room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
-        
-        # Create CSV content
-        output = StringIO()
-        writer = csv.writer(output)
-        
-        # Write header (Item ID and Room ID are text fields to preserve formatting)
-        writer.writerow([
-            'Item ID (Text)', 'Product Name', 'Quantity', 'Current Room ID (Text)', 
-            'Current Room Name', 'Lab Data Available', 'Total %', 'THCA %', 
-            'THC %', 'CBDA %', 'CBD %'
-        ])
-        
-        # Process inventory items with progress logging
-        items_processed = 0
-        items_with_lab_data = 0
-        items_without_lab_data = 0
-        start_time = time.time()
-        
-        logger.info(f"Processing {len(inventory_data)} inventory items for CSV generation")
-        
-        for i, (item_id, item_info) in enumerate(inventory_data.items()):
-            try:
-                # Log progress every 50 items
-                if i % 50 == 0:
-                    elapsed = time.time() - start_time
-                    logger.info(f"Processing item {i+1}/{len(inventory_data)} (elapsed: {elapsed:.1f}s)")
-                
-                # Get room name - use correct field name from BioTrack response
-                current_room_id = str(item_info.get('currentroom', ''))
-                current_room_name = room_lookup.get(current_room_id, 'Unknown Room')
-                
-                # Try to get lab data for this item (ensure barcode_id is string)
-                barcode_id = str(item_info.get('barcode_id') or item_info.get('barcode') or item_id)
-                lab_results = None
-                
-                if barcode_id:
-                    try:
-                        lab_results = get_inventory_qa_check(token, barcode_id)
-                    except Exception as e:
-                        logger.warning(f"Error getting lab data for barcode {barcode_id}: {str(e)}")
-                        lab_results = None
-                
-                # Lab data fields
-                if lab_results:
-                    lab_data_available = 'Yes'
-                    total_pct = lab_results.get('total', '')
-                    thca_pct = lab_results.get('thca', '')
-                    thc_pct = lab_results.get('thc', '')
-                    cbda_pct = lab_results.get('cbda', '')
-                    cbd_pct = lab_results.get('cbd', '')
-                    items_with_lab_data += 1
-                else:
-                    lab_data_available = 'No'
-                    total_pct = ''
-                    thca_pct = ''
-                    thc_pct = ''
-                    cbda_pct = ''
-                    cbd_pct = ''
-                    items_without_lab_data += 1
-                
-                # Write row - use correct field names from BioTrack response
-                writer.writerow([
-                    str(item_id),  # Ensure item_id is string
-                    item_info.get('productname', 'Unknown Product'),  # Use 'productname' from BioTrack
-                    item_info.get('remaining_quantity', 0),  # Use 'remaining_quantity' from BioTrack
-                    str(current_room_id),  # Ensure room_id is string
-                    current_room_name,
-                    lab_data_available,
-                    total_pct,
-                    thca_pct,
-                    thc_pct,
-                    cbda_pct,
-                    cbd_pct
-                ])
-                
-                items_processed += 1
-                
-            except Exception as e:
-                logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
-                continue
-        
-        output.seek(0)
+        # Check if file exists
+        if not os.path.exists(job.file_path):
+            return jsonify({'error': 'Report file not found'}), 404
         
         # Generate filename with timestamp
-        timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+        timestamp = job.completed_at.strftime('%Y%m%d_%H%M%S') if job.completed_at else 'latest'
         filename = f'inventory_report_{timestamp}.csv'
         
-        total_time = time.time() - start_time
-        logger.info(f"Generated inventory report CSV: {items_processed} items "
-                   f"({items_with_lab_data} with lab data, {items_without_lab_data} without), "
-                   f"processed in {total_time:.1f}s")
-        
-        from flask import Response
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': f'attachment; filename={filename}'}
+        from flask import send_file
+        return send_file(
+            job.file_path,
+            as_attachment=True,
+            download_name=filename,
+            mimetype='text/csv'
         )
         
     except Exception as e:
-        logger.error(f"Error generating inventory report CSV: {str(e)}")
-        return jsonify({'error': f'Failed to generate inventory report: {str(e)}'}), 500
+        logger.error(f"Error downloading inventory report: {str(e)}")
+        return jsonify({'error': f'Failed to download inventory report: {str(e)}'}), 500
+
+@app.route('/api/reports/status')
+@login_required
+def get_reports_status():
+    """Get status of both report types with timestamps"""
+    try:
+        # Get inventory report status
+        inventory_job = ReportJob.query.filter_by(
+            report_type='inventory',
+            status='completed'
+        ).order_by(ReportJob.completed_at.desc()).first()
+        
+        inventory_processing = ReportJob.query.filter_by(
+            report_type='inventory',
+            status='processing'
+        ).first()
+        
+        inventory_status = {
+            'status': 'processing' if inventory_processing else ('completed' if inventory_job else 'none'),
+            'last_generated': inventory_job.completed_at.isoformat() if inventory_job and inventory_job.completed_at else None,
+            'download_available': inventory_job is not None and inventory_job.file_path and os.path.exists(inventory_job.file_path)
+        }
+        
+        # Get finished goods report status
+        finished_goods_job = ReportJob.query.filter_by(
+            report_type='finished_goods',
+            status='completed'
+        ).order_by(ReportJob.completed_at.desc()).first()
+        
+        finished_goods_processing = ReportJob.query.filter_by(
+            report_type='finished_goods',
+            status='processing'
+        ).first()
+        
+        finished_goods_status = {
+            'status': 'processing' if finished_goods_processing else ('completed' if finished_goods_job else 'none'),
+            'last_generated': finished_goods_job.completed_at.isoformat() if finished_goods_job and finished_goods_job.completed_at else None,
+            'download_available': finished_goods_job is not None and finished_goods_job.file_path and os.path.exists(finished_goods_job.file_path)
+        }
+        
+        return jsonify({
+            'inventory': inventory_status,
+            'finished_goods': finished_goods_status
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting reports status: {str(e)}")
+        return jsonify({'error': f'Failed to get reports status: {str(e)}'}), 500
+
+@app.route('/api/report-jobs/<job_id>/status')
+@login_required
+def get_report_job_status(job_id):
+    """Get status of a specific report generation job"""
+    try:
+        job = ReportJob.query.filter_by(job_id=job_id).first()
+        if not job:
+            return jsonify({'error': 'Job not found'}), 404
+        
+        return jsonify({
+            'job_id': job.job_id,
+            'report_type': job.report_type,
+            'status': job.status,
+            'progress_percentage': job.progress_percentage,
+            'items_processed': job.items_processed,
+            'total_items': job.total_items,
+            'created_at': job.created_at.isoformat() if job.created_at else None,
+            'completed_at': job.completed_at.isoformat() if job.completed_at else None,
+            'error_message': job.error_message
+        })
+        
+    except Exception as e:
+        logger.error(f"Error getting job status: {str(e)}")
+        return jsonify({'error': f'Failed to get job status: {str(e)}'}), 500
 
 
 @app.route('/api/test-qa-check/<barcode_id>')
