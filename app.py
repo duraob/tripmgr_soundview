@@ -2304,7 +2304,7 @@ def validate_trip(trip_id):
                         # Search through inventory items for matching barcode_id field
                         found_item = None
                         for item_id, item_data in inventory_data.items():
-                            if str(item_data.get('barcode_id', '')) == str(barcode_id):
+                            if str(item_data.get('id', '')) == str(barcode_id):
                                 found_item = item_data
                                 break
                         
