@@ -2279,7 +2279,7 @@ def validate_trip(trip_id):
                 logger.info(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs during validation")
             
             if not barcode_ids:
-                order_errors.append(f'No valid BioTrack UIDs (16-digit numbers) found for order {trip_order.order_id}')
+                validation_summary.append(f'⚠ Order {trip_order.order_id}: No valid BioTrack UIDs found - will be skipped during execution')
             else:
                 validation_summary.append(f'✓ Order {trip_order.order_id}: {len(barcode_ids)} valid BioTrack UIDs found')
             
@@ -2301,8 +2301,15 @@ def validate_trip(trip_id):
                     
                     # Check each required SKU against available inventory
                     for barcode_id, required_quantity in inventory_requirements.items():
-                        if barcode_id in inventory_data:
-                            available_quantity = inventory_data[barcode_id].get('quantity', 0)
+                        # Search through inventory items for matching barcode_id field
+                        found_item = None
+                        for item_id, item_data in inventory_data.items():
+                            if str(item_data.get('barcode_id', '')) == str(barcode_id):
+                                found_item = item_data
+                                break
+                        
+                        if found_item:
+                            available_quantity = found_item.get('remaining_quantity', 0)
                             
                             # Convert to float for comparison (in case quantities are strings)
                             try:

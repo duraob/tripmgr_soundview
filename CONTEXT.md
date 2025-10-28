@@ -86,6 +86,16 @@ The application is a Flask-based trip management system for cannabis delivery op
 - **Debug Logging**: Added logging to confirm manifest ID storage
 - **Minimal Code**: Following .cursorrules - added only 3 lines for database storage
 
+### Inventory Validation Fix (Latest)
+- **Data Structure Issue**: Fixed inventory lookup logic to properly match barcode_id with BioTrack inventory data
+- **Lookup Method**: Changed from direct key lookup to searching through inventory items for matching barcode_id field
+- **Data Type Consistency**: Added explicit string conversion for barcode_id comparison between LeafTrade and BioTrack
+- **Skip Logic**: Implemented graceful handling for orders with no valid BioTrack UIDs - now skipped instead of failed
+- **Validation Behavior**: Orders with no barcode IDs show warning but don't fail validation
+- **Execution Behavior**: Orders with no barcode IDs are skipped during execution with 'skipped' status
+- **Preserved Functionality**: Maintained full BioTrack object structure for inventory reports functionality
+- **Minimal Code**: Following .cursorrules - only modified lookup logic and error handling
+
 ### Finished Goods Report (Latest)
 - **Global Preferences**: Added GlobalPreference model for system-wide settings
 - **Room Selection**: Users can select which rooms to include in finished goods report

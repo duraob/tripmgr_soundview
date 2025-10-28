@@ -141,6 +141,9 @@ def execute_trip_background_job(trip_id):
                     if result['status'] == 'success':
                         print(f"Order {trip_order.order_id} processed successfully")
                         successful_orders.append(result)
+                    elif result['status'] == 'skipped':
+                        print(f"Order {trip_order.order_id} skipped: {result.get('message', 'No valid BioTrack UIDs')}")
+                        # Don't add to failed_orders or critical_failures for skipped orders
                     else:
                         print(f"Order {trip_order.order_id} failed: {result.get('error', 'Unknown error')}")
                         failed_orders.append(result)
@@ -260,12 +263,11 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
             print(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs")
         
         if not sublot_data:
-            error_msg = f"No valid BioTrack UIDs (16-digit numbers) found for order {trip_order.order_id}"
-            print(f"Order processing failed: {error_msg}")
+            print(f"Order {trip_order.order_id}: No valid BioTrack UIDs found - skipping order")
             return {
                 'order_id': trip_order.order_id,
-                'status': 'failed',
-                'error': 'No valid BioTrack UIDs found in line items'
+                'status': 'skipped',
+                'message': 'No valid BioTrack UIDs found - order skipped'
             }
         
         # Create sublots for this order (original working pattern)
