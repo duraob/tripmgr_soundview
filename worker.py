@@ -40,6 +40,33 @@ def start_worker():
     except Exception as e:
         print(f"Warning: Could not clean old jobs: {e}")
     
+    # Reset stuck report statuses in database (if no active jobs in queue)
+    print("Checking for stuck report statuses...")
+    try:
+        from app import app
+        with app.app_context():
+            from rq import Queue
+            from utils.rpt_generation import _get_report_status, _set_preference
+            from models import db
+            
+            report_queue = Queue('report_generation', connection=redis_conn)
+            queue_length = len(report_queue)
+            
+            # Only reset if queue is empty (no active job processing)
+            if queue_length == 0:
+                for report_type in ['inventory', 'finished_goods']:
+                    status = _get_report_status(report_type)
+                    if status == 'generating':
+                        print(f"Resetting stuck '{report_type}' report status (queue is empty)")
+                        _set_preference(f'{report_type}_status', 'none')
+                        _set_preference(f'{report_type}_error', '')
+                db.session.commit()
+                print("Stuck status check complete")
+            else:
+                print(f"Queue has {queue_length} job(s), skipping status reset")
+    except Exception as e:
+        print(f"Warning: Could not check/reset stuck statuses: {e}")
+    
     # Use SimpleWorker for both platforms (same as trip execution)
     # SimpleWorker handles cross-platform compatibility automatically
     worker = SimpleWorker(['trip_execution', 'report_generation'], connection=redis_conn)
