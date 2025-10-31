@@ -99,11 +99,20 @@ The application is a Flask-based trip management system for cannabis delivery op
 ### Finished Goods Report (Latest)
 - **Global Preferences**: Added GlobalPreference model for system-wide settings
 - **Room Selection**: Users can select which rooms to include in finished goods report
-- **Product Type Filtering**: Filters by finished goods inventory types (22,23,24,25,28,34,35,36,37,38,39,45)
+- **Product Type Filtering**: Filters by finished goods inventory types (22,23,24,25,28,34,35,36,37,38,39,45,62)
 - **QA Passed Filtering**: Only includes items with lab data available
 - **CSV Export**: Downloadable CSV with complete lab test results
 - **Persistent Settings**: Room selections persist across sessions
 - **UI Integration**: Added to config page with room selection checkboxes
+- **Column Updates**:
+  - **Batch Ref**: Renamed from "Item ID (Text)"
+  - **Pull Number**: New column - "C00800" + last 5 characters of product name
+  - **Package Unit**: New column based on inventory type:
+    - Type 22 → "100.00mg"
+    - Type 62 → "500.00mg" (if product contains ".5g"), "1000.00mg" (if contains "1g" or default), "" (other types)
+  - **Removed Columns**: Current Room ID (Text), Inventory Type, Lab Data Available
+  - **Retained Columns**: Product Name, Quantity, Current Room Name, Total %, THCA %, THC %, CBDA %, CBD %
+- **Helper Functions**: Added `_calculate_pull_number()` and `_calculate_package_unit()` for modular logic
 - **Minimal Code**: Following .cursorrules - reused existing patterns, ~250 lines total
 
 ### Mappings Export Enhancement

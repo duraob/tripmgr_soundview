@@ -208,6 +208,29 @@ def _create_inventory_csv(inventory_data, room_lookup):
     output.seek(0)
     return output.getvalue()
 
+def _calculate_pull_number(product_name):
+    """Calculate pull number from product name: C00800 + last 5 characters"""
+    if not product_name:
+        return 'C00800'
+    # Get last 5 characters, pad with zeros if needed
+    last_chars = product_name[-5:].zfill(5)
+    return f'C00800{last_chars}'
+
+def _calculate_package_unit(inventory_type, product_name):
+    """Calculate package unit based on inventory type and product name"""
+    if inventory_type == 22:
+        return '100.00mg'
+    elif inventory_type == 62:
+        product_name_lower = product_name.lower() if product_name else ''
+        if '.5g' in product_name_lower:
+            return '500.00mg'
+        elif '1g' in product_name_lower:
+            return '1000.00mg'
+        else:
+            return '1000.00mg'
+    else:
+        return ''
+
 def _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms):
     """Create finished goods CSV content with filtering"""
     output = StringIO()
@@ -215,13 +238,12 @@ def _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms):
     
     # Write header
     writer.writerow([
-        'Item ID (Text)', 'Product Name', 'Quantity', 'Current Room ID (Text)', 
-        'Current Room Name', 'Inventory Type', 'Lab Data Available', 'Total %', 'THCA %', 
-        'THC %', 'CBDA %', 'CBD %'
+        'Batch Ref', 'Pull Number', 'Product Name', 'Quantity', 'Package Unit', 
+        'Current Room Name', 'Total %', 'THCA %', 'THC %', 'CBDA %', 'CBD %'
     ])
     
     # Define finished goods inventory types
-    finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45]
+    finished_goods_types = [22, 23, 24, 25, 28, 34, 35, 36, 37, 38, 39, 45, 62]
     
     # Process inventory items with filtering
     for item_id, item_info in inventory_data.items():
@@ -260,15 +282,19 @@ def _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms):
             cbda_pct = lab_results.get('cbda', '') if lab_results else ''
             cbd_pct = lab_results.get('cbd', '') if lab_results else ''
             
+            # Calculate new fields
+            product_name = item_info.get('productname', 'Unknown Product')
+            pull_number = _calculate_pull_number(product_name)
+            package_unit = _calculate_package_unit(inventory_type, product_name)
+            
             # Write row
             writer.writerow([
-                str(item_id),
-                item_info.get('productname', 'Unknown Product'),
+                str(item_id),  # Batch Ref
+                pull_number,
+                product_name,
                 item_info.get('remaining_quantity', 0),
-                current_room_id,
+                package_unit,
                 current_room_name,
-                inventory_type,
-                'Yes',  # Lab data available
                 total_pct,
                 thca_pct,
                 thc_pct,

@@ -2323,7 +2323,7 @@ def validate_trip(trip_id):
                                     )
                                 else:
                                     validation_summary.append(
-                                        f'✓ SKU {barcode_id}: {required_quantity} units available '
+                                        f'SKU {barcode_id}: {required_quantity} units available '
                                         f'(required: {required_quantity}, available: {available_quantity})'
                                     )
                             except (ValueError, TypeError) as e:
