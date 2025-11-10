@@ -656,6 +656,24 @@ def execute_trip(trip_id):
         if not driver1 or not driver2 or not vehicle:
             return jsonify({'error': 'Driver or vehicle information not found'}), 400
         
+        # Get or create TripExecution record
+        from models import TripExecution
+        execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
+        if not execution:
+            execution = TripExecution(trip_id=trip_id)
+            db.session.add(execution)
+        
+        # Set started_at timestamp when execute button is clicked
+        from utils.timezone import get_est_now
+        execution.started_at = get_est_now()
+        execution.status = 'processing'
+        execution.general_error = None  # Clear any previous general errors
+        
+        # Reset all trip order statuses to pending and clear error messages
+        for trip_order in trip_orders:
+            trip_order.status = 'pending'
+            trip_order.error_message = None
+        
         # Enqueue background job
         from utils.task_queue import enqueue_trip_execution
         job_id = enqueue_trip_execution(trip_id)

@@ -126,6 +126,8 @@ def execute_trip_background_job(trip_id):
                     if not order_details:
                         error_msg = f"Could not retrieve order details for {trip_order.order_id}"
                         print(f"Order processing failed: {error_msg}")
+                        trip_order.error_message = error_msg
+                        db.session.commit()
                         manifest_results.append({
                             'order_id': trip_order.order_id,
                             'status': 'failed',
@@ -153,6 +155,8 @@ def execute_trip_background_job(trip_id):
                 except Exception as e:
                     error_msg = f"Error processing order {trip_order.order_id}: {str(e)}"
                     print(error_msg)
+                    trip_order.error_message = error_msg
+                    db.session.commit()
                     manifest_results.append({
                         'order_id': trip_order.order_id,
                         'status': 'failed',
@@ -164,6 +168,9 @@ def execute_trip_background_job(trip_id):
             if critical_failures:
                 error_details = '; '.join(critical_failures)
                 print(f"Critical failures detected: {error_details}")
+                execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
+                if execution:
+                    execution.general_error = error_details
                 _update_trip_execution_status(trip_id, 'failed', f'Trip execution failed due to critical errors: {error_details}')
                 trip.execution_status = 'failed'
                 db.session.commit()
@@ -199,11 +206,14 @@ def execute_trip_background_job(trip_id):
             
         except Exception as e:
             print(f"=== RQ TRIP EXECUTION FAILED ===")
+            execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
+            if execution:
+                execution.general_error = str(e)
             _update_trip_execution_status(trip_id, 'failed', f'Execution failed: {str(e)}')
             trip = db.session.get(Trip, trip_id)
             if trip:
                 trip.execution_status = 'failed'
-                db.session.commit()
+            db.session.commit()
             raise e
 
 def _update_trip_execution_status(trip_id, status, progress_message=None):
@@ -279,6 +289,8 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         if isinstance(sublot_result, dict) and not sublot_result.get('success', True):
             error_msg = f"BioTrack sublot creation failed for order {trip_order.order_id}: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
             print(f"Sublot creation failed: {error_msg}")
+            trip_order.error_message = error_msg
+            db.session.commit()
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
@@ -289,11 +301,18 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         if not new_barcode_ids:
             error_msg = f"No barcode IDs returned from sublot creation for order {trip_order.order_id}"
             print(f"Order processing failed: {error_msg}")
+            trip_order.error_message = error_msg
+            db.session.commit()
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
                 'error': 'No barcode IDs returned from sublot creation'
             }
+        
+        # Update status to sublotted after successful sublot creation
+        trip_order.status = 'sublotted'
+        trip_order.error_message = None
+        db.session.commit()
         
         # Get room ID from location mapping
         from models import LocationMapping
@@ -323,11 +342,18 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         if not move_result:
             error_msg = f"Failed to move sublots to room for order {trip_order.order_id}"
             print(f"Order processing failed: {error_msg}")
+            trip_order.error_message = error_msg
+            db.session.commit()
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
                 'error': 'Failed to move sublots to room'
             }
+        
+        # Update status to inventory_moved after successful move
+        trip_order.status = 'inventory_moved'
+        trip_order.error_message = None
+        db.session.commit()
         
         # Get vendor ID from location mapping
         vendor_license = 'default_license'  # Default fallback
@@ -366,6 +392,8 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         if not manifest_result:
             error_msg = f"Failed to create manifest for order {trip_order.order_id}"
             print(f"Manifest creation failed: {error_msg}")
+            trip_order.error_message = error_msg
+            db.session.commit()
             return {
                 'order_id': trip_order.order_id,
                 'status': 'failed',
@@ -374,6 +402,9 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         
         # Store manifest ID in database (following reference implementation)
         trip_order.manifest_id = str(manifest_result)
+        # Update status to manifested after successful manifest creation
+        trip_order.status = 'manifested'
+        trip_order.error_message = None
         db.session.commit()
         print(f"Stored manifest ID {manifest_result} for order {trip_order.order_id}")
         
@@ -385,8 +416,11 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         }
         
     except Exception as e:
+        error_msg = f"Critical error processing order: {str(e)}"
+        trip_order.error_message = error_msg
+        db.session.commit()
         return {
             'order_id': trip_order.order_id,
             'status': 'failed',
-            'error': f"Critical error processing order: {str(e)}"
+            'error': error_msg
         }

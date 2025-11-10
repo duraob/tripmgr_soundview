@@ -80,6 +80,10 @@ class TripOrder(db.Model):
     manifest_attached = db.Column(db.Boolean, default=False)
     invoice_attached = db.Column(db.Boolean, default=False)
     email_ready = db.Column(db.Boolean, default=False)
+    
+    # Execution status tracking
+    status = db.Column(db.String(20), default='pending')  # pending, sublotted, inventory_moved, manifested
+    error_message = db.Column(db.Text, nullable=True)  # Order-specific error messages
 
 class Driver(db.Model):
     """Driver model representing drivers from BioTrack"""
@@ -207,7 +211,9 @@ class TripExecution(db.Model):
     job_id = db.Column(db.String(100))  # RQ job ID
     created_at = db.Column(db.DateTime, default=get_est_now)
     updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
-    completed_at = db.Column(db.DateTime)
+    started_at = db.Column(db.DateTime, nullable=True)  # When execute button was clicked
+    completed_at = db.Column(db.DateTime, nullable=True)  # When execution finished
+    general_error = db.Column(db.Text, nullable=True)  # General trip-level errors
 
 class GlobalPreference(db.Model):
     """Global preferences model for system-wide settings"""

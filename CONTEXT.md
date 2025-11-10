@@ -5,7 +5,32 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Unified Report Generation System (Latest)
+### Trip Order Status Tracking & Error Logging (Latest)
+- **Status Progression**: Trip orders now track execution status through biotrack actions
+  - Status flow: `pending` → `sublotted` → `inventory_moved` → `manifested`
+  - Status updates automatically after each successful biotrack action
+- **Error Logging**: Comprehensive error tracking at both order and trip levels
+  - Order-level errors: Stored in `TripOrder.error_message` for specific order failures
+  - Trip-level errors: Stored in `TripExecution.general_error` for general execution failures
+- **Execution Timestamps**: Track when execute button was clicked and when execution completed
+  - `TripExecution.started_at`: Timestamp when execute button was clicked (EST/EDT)
+  - `TripExecution.completed_at`: Timestamp when execution finished (EST/EDT)
+- **UI Enhancements**: Trip detail page displays status and errors
+  - Status badges: Color-coded badges showing current status for each order
+  - Error messages: Red alert boxes displaying error messages for failed orders
+  - Execution info: Section showing execution start/completion times
+  - General errors: Prominent display of trip-level errors at top of page
+- **Database Schema**: Added new fields to models
+  - `TripOrder.status`: String field tracking execution status (default: 'pending')
+  - `TripOrder.error_message`: Text field for order-specific errors
+  - `TripExecution.started_at`: DateTime field for execution start time
+  - `TripExecution.general_error`: Text field for trip-level errors
+- **Status Reset**: Order statuses reset to 'pending' when execute is clicked again
+- **Error Persistence**: Errors persist until next execution attempt
+- **Minimal Code**: Following .cursorrules - simple status tracking, no over-engineering
+- **Production Ready**: All timestamps use EST/EDT timezone, migration included
+
+### Unified Report Generation System
 - **Consistent Architecture**: Report generation now uses same patterns as trip execution
 - **Task Queue Module**: Extended `utils/task_queue.py` to handle report generation consistently
 - **Cross-Platform Worker**: Simplified worker that works on both Windows and Ubuntu
