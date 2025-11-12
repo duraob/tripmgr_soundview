@@ -5,7 +5,18 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Trip Order Status Tracking & Error Logging (Latest)
+### Trip Execution Duplicate Key Fix (Latest)
+- **Issue**: Fixed duplicate key violation error when executing trips with existing TripExecution records
+- **Root Cause**: Race condition where query didn't find existing record, causing INSERT to fail on unique constraint
+- **Solution**: Added IntegrityError handling in `_update_trip_execution_status()` function
+  - Catches IntegrityError when INSERT fails
+  - Rolls back transaction and retries with UPDATE instead
+  - Handles race condition gracefully
+- **Session Rollback**: Added `db.session.rollback()` in exception handler to prevent PendingRollbackError
+- **Minimal Code**: Following .cursorrules - only added error handling, no refactoring
+- **Production Ready**: Trip execution now handles existing records correctly without errors
+
+### Trip Order Status Tracking & Error Logging
 - **Status Progression**: Trip orders now track execution status through biotrack actions
   - Status flow: `pending` → `sublotted` → `inventory_moved` → `manifested`
   - Status updates automatically after each successful biotrack action

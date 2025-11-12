@@ -7,6 +7,7 @@ import json
 import logging
 from datetime import datetime
 
+from sqlalchemy.exc import IntegrityError
 from models import db, Trip, TripOrder, Driver, Vehicle, TripExecution
 from utils.timezone import get_est_now
 import re
@@ -206,6 +207,7 @@ def execute_trip_background_job(trip_id):
             
         except Exception as e:
             print(f"=== RQ TRIP EXECUTION FAILED ===")
+            db.session.rollback()  # Rollback any pending transaction before querying
             execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
             if execution:
                 execution.general_error = str(e)
@@ -227,6 +229,19 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
             progress_message=progress_message
         )
         db.session.add(execution)
+        try:
+            db.session.commit()
+        except IntegrityError:
+            # Record already exists (race condition), rollback and retry with update
+            db.session.rollback()
+            execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
+            if execution:
+                execution.status = status
+                execution.progress_message = progress_message
+                execution.updated_at = get_est_now()
+                if status in ['completed', 'failed']:
+                    execution.completed_at = get_est_now()
+                db.session.commit()
     else:
         execution.status = status
         execution.progress_message = progress_message
@@ -234,8 +249,8 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
         
         if status in ['completed', 'failed']:
             execution.completed_at = get_est_now()
-    
-    db.session.commit()
+        
+        db.session.commit()
 
 def _process_order_manifest(trip_order, order_details, token, route_segments=None):
     """Process individual order manifest creation using original working pattern"""
