@@ -12,6 +12,8 @@ from models import db, Trip, TripOrder, Driver, Vehicle, TripExecution
 from utils.timezone import get_est_now, get_est_now_naive
 import re
 
+logger = logging.getLogger('utils.trip_execution')
+
 def _is_valid_biotrack_uid(barcode_id):
     """Validate that barcode_id is a standard BioTrack UID (16-digit number)"""
     if not barcode_id:
@@ -27,8 +29,7 @@ def execute_trip_background_job(trip_id):
     
     with app.app_context():
         try:
-            print(f"=== RQ TRIP EXECUTION STARTED ===")
-            print(f"Trip ID: {trip_id}")
+            logger.info(f"RQ trip execution started for trip {trip_id}")
             
             # Update execution status to processing
             _update_trip_execution_status(trip_id, 'processing', 'Starting trip execution...')
@@ -70,9 +71,9 @@ def execute_trip_background_job(trip_id):
             if trip.route_data:
                 try:
                     route_segments = json.loads(trip.route_data)
-                    print(f"Using existing route segments from previous execution attempt")
+                    logger.info(f"Using existing route segments for trip {trip_id}")
                 except json.JSONDecodeError:
-                    print("Failed to parse existing route data, will regenerate")
+                    logger.warning(f"Failed to parse existing route data for trip {trip_id}, will regenerate")
                     trip.route_data = None
             
             # Generate route segments if needed
@@ -80,23 +81,14 @@ def execute_trip_background_job(trip_id):
                 from api.googlemaps_client import GoogleMapsClient
                 googlemaps_client = GoogleMapsClient()
                 
-                # Get trip data for OpenAI routing
-                trip_data = {
-                    'driver1_name': driver1.name,
-                    'driver2_name': driver2.name,
-                    'vehicle_name': vehicle.name,
-                    'delivery_date': get_est_now().strftime('%Y-%m-%d'),
-                    'orders': []
-                }
-                
-                # Extract addresses for OpenAI routing
+                # Extract addresses for route generation
                 addresses = []
                 for trip_order in trip_orders:
                     address = trip_order.address or 'Unknown Address'
                     addresses.append(address)
                 
                 # Generate route segments using Google Maps
-                print(f"Generating route segments for {len(addresses)} addresses")
+                logger.info(f"Generating route segments for {len(addresses)} addresses in trip {trip_id}")
                 
                 # Prepare delivery date and start time
                 delivery_date = trip.delivery_date.strftime('%Y-%m-%d')
@@ -126,7 +118,7 @@ def execute_trip_background_job(trip_id):
                     order_details = get_order_details(trip_order.order_id)
                     if not order_details:
                         error_msg = f"Could not retrieve order details for {trip_order.order_id}"
-                        print(f"Order processing failed: {error_msg}")
+                        logger.error(f"Order processing failed: {error_msg}")
                         trip_order.error_message = error_msg
                         db.session.commit()
                         manifest_results.append({
@@ -142,20 +134,20 @@ def execute_trip_background_job(trip_id):
                     manifest_results.append(result)
                     
                     if result['status'] == 'success':
-                        print(f"Order {trip_order.order_id} processed successfully")
+                        logger.info(f"Order {trip_order.order_id} processed successfully")
                         successful_orders.append(result)
                     elif result['status'] == 'skipped':
-                        print(f"Order {trip_order.order_id} skipped: {result.get('message', 'No valid BioTrack UIDs')}")
+                        logger.info(f"Order {trip_order.order_id} skipped: {result.get('message', 'No valid BioTrack UIDs')}")
                         # Don't add to failed_orders or critical_failures for skipped orders
                     else:
-                        print(f"Order {trip_order.order_id} failed: {result.get('error', 'Unknown error')}")
+                        logger.error(f"Order {trip_order.order_id} failed: {result.get('error', 'Unknown error')}")
                         failed_orders.append(result)
                         if 'critical' in result.get('error', '').lower():
                             critical_failures.append(result['error'])
                     
                 except Exception as e:
                     error_msg = f"Error processing order {trip_order.order_id}: {str(e)}"
-                    print(error_msg)
+                    logger.error(error_msg, exc_info=True)
                     trip_order.error_message = error_msg
                     db.session.commit()
                     manifest_results.append({
@@ -168,7 +160,7 @@ def execute_trip_background_job(trip_id):
             # Check results and update trip status
             if critical_failures:
                 error_details = '; '.join(critical_failures)
-                print(f"Critical failures detected: {error_details}")
+                logger.error(f"Critical failures detected in trip {trip_id}: {error_details}")
                 execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
                 if execution:
                     execution.general_error = error_details
@@ -198,7 +190,7 @@ def execute_trip_background_job(trip_id):
                 trip.date_transacted = get_est_now_naive()
                 db.session.commit()
             
-            print(f"=== RQ TRIP EXECUTION COMPLETED ===")
+            logger.info(f"RQ trip execution completed successfully for trip {trip_id}")
             return {
                 'success': True,
                 'message': 'Trip execution completed successfully',
@@ -206,7 +198,7 @@ def execute_trip_background_job(trip_id):
             }
             
         except Exception as e:
-            print(f"=== RQ TRIP EXECUTION FAILED ===")
+            logger.error(f"RQ trip execution failed for trip {trip_id}: {str(e)}", exc_info=True)
             db.session.rollback()  # Rollback any pending transaction before querying
             execution = db.session.query(TripExecution).filter_by(trip_id=trip_id).first()
             if execution:
@@ -255,14 +247,14 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
 def _process_order_manifest(trip_order, order_details, token, route_segments=None):
     """Process individual order manifest creation using original working pattern"""
     try:
-        print(f"Processing manifest for order {trip_order.order_id}")
+        logger.info(f"Processing manifest for order {trip_order.order_id}")
         
         # Extract order data
         order_data = order_details.get('order', {})
         dispensary_location = order_data.get('dispensary_location', {})
         customer = order_data.get('customer', {})
         
-        print(f"Order data extracted - Customer: {customer.get('name', 'Unknown')}, Location: {dispensary_location.get('city', 'Unknown')}")
+        logger.debug(f"Order data extracted - Customer: {customer.get('name', 'Unknown')}, Location: {dispensary_location.get('city', 'Unknown')}")
         
         # Get line items for sublot creation (original working pattern)
         line_items = order_details.get('line_items', [])
@@ -281,14 +273,14 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
                 })
             elif barcode_id:
                 invalid_uid_count += 1
-                print(f"Skipping invalid BioTrack UID: {barcode_id} (not 16 digits)")
+                logger.debug(f"Skipping invalid BioTrack UID: {barcode_id} (not 16 digits)")
         
         # Log summary of filtered items
         if invalid_uid_count > 0:
-            print(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs")
+            logger.warning(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs for order {trip_order.order_id}")
         
         if not sublot_data:
-            print(f"Order {trip_order.order_id}: No valid BioTrack UIDs found - skipping order")
+            logger.warning(f"Order {trip_order.order_id}: No valid BioTrack UIDs found - skipping order")
             return {
                 'order_id': trip_order.order_id,
                 'status': 'skipped',
@@ -296,14 +288,14 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
             }
         
         # Create sublots for this order (original working pattern)
-        print(f"Creating sublot for order {trip_order.order_id}")
+        logger.info(f"Creating sublot for order {trip_order.order_id}")
         from api.biotrack import post_sublot_bulk_create
         sublot_result = post_sublot_bulk_create(token, sublot_data)
         
         # Check if sublot creation returned an error response
         if isinstance(sublot_result, dict) and not sublot_result.get('success', True):
             error_msg = f"BioTrack sublot creation failed for order {trip_order.order_id}: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
-            print(f"Sublot creation failed: {error_msg}")
+            logger.error(f"Sublot creation failed: {error_msg}")
             trip_order.error_message = error_msg
             db.session.commit()
             return {
@@ -315,7 +307,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         new_barcode_ids = sublot_result
         if not new_barcode_ids:
             error_msg = f"No barcode IDs returned from sublot creation for order {trip_order.order_id}"
-            print(f"Order processing failed: {error_msg}")
+            logger.error(f"Order processing failed: {error_msg}")
             trip_order.error_message = error_msg
             db.session.commit()
             return {
@@ -344,7 +336,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
                 room_id = trip_order.room_override
         
         # Move sublots to room (original working pattern)
-        print(f"Moving sublots to room for order {trip_order.order_id}")
+        logger.info(f"Moving sublots to room for order {trip_order.order_id}")
         move_data = []
         for barcode_id in new_barcode_ids:
             move_data.append({
@@ -356,7 +348,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         move_result = post_sublot_move(token, move_data)
         if not move_result:
             error_msg = f"Failed to move sublots to room for order {trip_order.order_id}"
-            print(f"Order processing failed: {error_msg}")
+            logger.error(f"Order processing failed: {error_msg}")
             trip_order.error_message = error_msg
             db.session.commit()
             return {
@@ -381,7 +373,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
                 vendor_license = location_mapping.biotrack_vendor_id
         
         # Create manifest with route data (original working pattern)
-        print(f"Creating manifest for order {trip_order.order_id}")
+        logger.info(f"Creating manifest for order {trip_order.order_id}")
         
         # Get route segment for this order based on sequence
         route_index = trip_order.sequence_order - 1
@@ -406,7 +398,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         
         if not manifest_result:
             error_msg = f"Failed to create manifest for order {trip_order.order_id}"
-            print(f"Manifest creation failed: {error_msg}")
+            logger.error(f"Manifest creation failed: {error_msg}")
             trip_order.error_message = error_msg
             db.session.commit()
             return {
@@ -421,7 +413,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         trip_order.status = 'manifested'
         trip_order.error_message = None
         db.session.commit()
-        print(f"Stored manifest ID {manifest_result} for order {trip_order.order_id}")
+        logger.info(f"Stored manifest ID {manifest_result} for order {trip_order.order_id}")
         
         return {
             'order_id': trip_order.order_id,
@@ -432,6 +424,7 @@ def _process_order_manifest(trip_order, order_details, token, route_segments=Non
         
     except Exception as e:
         error_msg = f"Critical error processing order: {str(e)}"
+        logger.error(f"Critical error processing order {trip_order.order_id}: {error_msg}", exc_info=True)
         trip_order.error_message = error_msg
         db.session.commit()
         return {

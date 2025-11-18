@@ -14,7 +14,7 @@ Think of it as a smart coordinator that helps organize delivery trips by taking 
 1. **Order Collection**: The app pulls orders from LeafTrade that are ready for delivery
 2. **Trip Building**: Users select which orders to group together into a delivery trip
 3. **Resource Assignment**: The app assigns 2 drivers and 1 vehicle from BioTrack to each trip
-4. **Route Planning**: Using AI (OpenAI), the app creates turn-by-turn directions for delivery routes with proper timing
+4. **Route Planning**: Using Google Maps Routes API, the app creates turn-by-turn directions for delivery routes with proper timing
 5. **Automation**: When a trip is finalized, the app automatically:
    - Moves inventory in BioTrack
    - Creates delivery manifests
@@ -85,7 +85,7 @@ Before using the application, you need to configure:
 - Or use SQLite for development (default)
 
 ### 2. API Keys
-- **OpenAI API Key**: For route optimization
+- **Google Maps API Key**: For route optimization
 - **LeafTrade API**: For order data
 - **BioTrack API**: For drivers, vehicles, and inventory
 
@@ -108,11 +108,11 @@ Before using the application, you need to configure:
 - **Error Handling**: Comprehensive error handling with graceful degradation and user-friendly messaging
 
 ### 🚧 In Progress
-- **Trip Execution**: OpenAI integration for route optimization and automated workflows
+- **Trip Execution**: Google Maps integration for route optimization and automated workflows
 - **Email Notifications**: Automated completion alerts and status updates
 
 ### 📋 Next Steps
-1. **OpenAI Integration**: Implement route optimization and step-by-step direction generation
+1. **Route Optimization**: Google Maps Routes API integration for turn-by-turn direction generation
 2. **Automated Workflows**: Build BioTrack manifest creation and inventory movement automation
 3. **Email Notifications**: Add completion alerts and status update system
 4. **Production Deployment**: Set up monitoring, logging, and performance optimization

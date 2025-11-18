@@ -75,7 +75,6 @@ document.addEventListener('DOMContentLoaded', function() {
             .then(response => response.json())
             .then(data => {
                 if (data.error) {
-                    console.error('Error checking trip status:', data.error);
                     return;
                 }
                 
@@ -92,7 +91,7 @@ document.addEventListener('DOMContentLoaded', function() {
                 }
             })
             .catch(error => {
-                console.error('Error polling trip status:', error);
+                // Silent error handling - polling will retry
             });
     }
     

@@ -242,7 +242,7 @@ class GoogleMapsClient:
             # Join instructions and limit length
             route_text = '\n'.join(instructions)
             
-            # Limit to reasonable length (similar to OpenAI output)
+            # Limit to reasonable length for route instructions
             if len(route_text) > 1500:
                 # Keep first 10 instructions and truncate
                 limited_instructions = instructions[:10]

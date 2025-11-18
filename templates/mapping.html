@@ -377,7 +377,6 @@ async function loadAllData() {
         renderMappings();
 
     } catch (error) {
-        console.error('Error loading data:', error);
         showAlert('Error loading data. Please refresh the page.', 'error');
     }
 }
@@ -773,7 +772,6 @@ async function saveMapping() {
         }
 
     } catch (error) {
-        console.error('Error saving mapping:', error);
         showAlert('Error saving mapping. Please try again.', 'error');
     } finally {
         // Hide loading state
@@ -805,7 +803,6 @@ async function deleteMapping(mappingId) {
         }
 
     } catch (error) {
-        console.error('Error deleting mapping:', error);
         showAlert('Error deleting mapping. Please try again.', 'error');
     }
 }

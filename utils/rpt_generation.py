@@ -5,15 +5,18 @@ Following .cursorrules: minimal code, modular functions, production ready
 import os
 import csv
 import time
+import logging
 from datetime import datetime
 from io import StringIO
 from flask import current_app
 from models import db, GlobalPreference
 from api.biotrack import get_auth_token, get_inventory_info, get_room_info, get_inventory_qa_check
 
+logger = logging.getLogger('utils.rpt_generation')
+
 def generate_inventory_report_simple():
     """Generate full inventory report - simple and clean"""
-    print("Starting inventory report generation...")
+    logger.info("Starting inventory report generation")
     
     # Ensure Flask app context
     from app import app
@@ -23,24 +26,24 @@ def generate_inventory_report_simple():
             _update_report_status('inventory', 'generating')
             
             # Get BioTrack data
-            print("Authenticating with BioTrack...")
+            logger.info("Authenticating with BioTrack")
             token = get_auth_token()
             if not token:
                 raise Exception("Failed to authenticate with BioTrack API")
             
-            print("Fetching inventory data...")
+            logger.info("Fetching inventory data")
             inventory_data = get_inventory_info(token)
             if not inventory_data:
                 raise Exception("Failed to retrieve inventory data from BioTrack")
             
-            print("Fetching room data...")
+            logger.info("Fetching room data")
             room_data = get_room_info(token)
             room_lookup = {}
             if room_data:
                 room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
             
             # Generate CSV
-            print(f"Processing {len(inventory_data)} inventory items...")
+            logger.info(f"Processing {len(inventory_data)} inventory items")
             csv_content = _create_inventory_csv(inventory_data, room_lookup)
             
             # Save file
@@ -49,16 +52,16 @@ def generate_inventory_report_simple():
             
             # Update status to ready
             _update_report_status('inventory', 'ready', filename, file_path)
-            print(f"Inventory report completed: {file_path}")
+            logger.info(f"Inventory report completed: {file_path}")
             
         except Exception as e:
-            print(f"Error generating inventory report: {str(e)}")
+            logger.error(f"Error generating inventory report: {str(e)}", exc_info=True)
             _update_report_status('inventory', 'error', error=str(e))
             raise
 
 def generate_finished_goods_report_simple():
     """Generate finished goods report with room filtering"""
-    print("Starting finished goods report generation...")
+    logger.info("Starting finished goods report generation")
     
     # Ensure Flask app context
     from app import app
@@ -69,27 +72,27 @@ def generate_finished_goods_report_simple():
             
             # Get room selection
             selected_rooms = _get_selected_rooms()
-            print(f"Selected rooms: {selected_rooms}")
+            logger.info(f"Selected rooms: {selected_rooms}")
             
             # Get BioTrack data
-            print("Authenticating with BioTrack...")
+            logger.info("Authenticating with BioTrack")
             token = get_auth_token()
             if not token:
                 raise Exception("Failed to authenticate with BioTrack API")
             
-            print("Fetching inventory data...")
+            logger.info("Fetching inventory data")
             inventory_data = get_inventory_info(token)
             if not inventory_data:
                 raise Exception("Failed to retrieve inventory data from BioTrack")
             
-            print("Fetching room data...")
+            logger.info("Fetching room data")
             room_data = get_room_info(token)
             room_lookup = {}
             if room_data:
                 room_lookup = {room_id: room_info['name'] for room_id, room_info in room_data.items()}
             
             # Generate filtered CSV
-            print(f"Processing {len(inventory_data)} inventory items with filtering...")
+            logger.info(f"Processing {len(inventory_data)} inventory items with filtering")
             csv_content = _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms)
             
             # Save file
@@ -98,10 +101,10 @@ def generate_finished_goods_report_simple():
             
             # Update status to ready
             _update_report_status('finished_goods', 'ready', filename, file_path)
-            print(f"Finished goods report completed: {file_path}")
+            logger.info(f"Finished goods report completed: {file_path}")
             
         except Exception as e:
-            print(f"Error generating finished goods report: {str(e)}")
+            logger.error(f"Error generating finished goods report: {str(e)}", exc_info=True)
             _update_report_status('finished_goods', 'error', error=str(e))
             raise
 
@@ -124,10 +127,10 @@ def _update_report_status(report_type, status, filename=None, file_path=None, er
             _set_preference(f'{report_type}_error', error)
         
         db.session.commit()
-        print(f"Updated {report_type} status to: {status}")
+        logger.debug(f"Updated {report_type} status to: {status}")
         
     except Exception as e:
-        print(f"Error updating report status: {str(e)}")
+        logger.error(f"Error updating report status: {str(e)}", exc_info=True)
         db.session.rollback()
 
 def _get_report_status(report_type):
@@ -202,7 +205,7 @@ def _create_inventory_csv(inventory_data, room_lookup):
             ])
             
         except Exception as e:
-            print(f"Error processing inventory item {item_id}: {str(e)}")
+            logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
             continue
     
     output.seek(0)
@@ -303,7 +306,7 @@ def _create_finished_goods_csv(inventory_data, room_lookup, selected_rooms):
             ])
             
         except Exception as e:
-            print(f"Error processing inventory item {item_id}: {str(e)}")
+            logger.warning(f"Error processing inventory item {item_id}: {str(e)}")
             continue
     
     output.seek(0)
@@ -338,12 +341,12 @@ def _cleanup_old_reports(report_type, current_file_path):
                 old_file_path = os.path.join(storage_dir, filename)
                 try:
                     os.remove(old_file_path)
-                    print(f"Cleaned up old report: {filename}")
+                    logger.debug(f"Cleaned up old report: {filename}")
                 except Exception as e:
-                    print(f"Error cleaning up {filename}: {str(e)}")
+                    logger.warning(f"Error cleaning up {filename}: {str(e)}")
                     
     except Exception as e:
-        print(f"Error during cleanup: {str(e)}")
+        logger.warning(f"Error during cleanup: {str(e)}")
 
 def _get_preference(key, default_value=''):
     """Get preference value"""
@@ -363,5 +366,5 @@ def _set_preference(key, value):
             pref = GlobalPreference(preference_key=key, preference_value=str(value))
             db.session.add(pref)
     except Exception as e:
-        print(f"Error setting preference {key}: {str(e)}")
+        logger.error(f"Error setting preference {key}: {str(e)}", exc_info=True)
         raise

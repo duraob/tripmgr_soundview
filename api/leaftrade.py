@@ -411,6 +411,7 @@ def get_orders(status: str = "approved") -> Optional[Dict[str, Dict[str, Any]]]:
 def get_order_details(order_id: str) -> Optional[Dict[str, Any]]:
     """
     Retrieve complete order details including line items from LeafTrade API.
+    Uses simple in-memory cache with 5-minute TTL.
     
     Args:
         order_id: LeafTrade order ID
@@ -424,6 +425,14 @@ def get_order_details(order_id: str) -> Optional[Dict[str, Any]]:
     if not order_id:
         logger.error("Order ID is required")
         return None
+    
+    # Check cache first
+    from utils.cache import get as cache_get, set as cache_set
+    cache_key = f"leaftrade_order_{order_id}"
+    cached_data = cache_get(cache_key)
+    if cached_data is not None:
+        logger.debug(f"Returning cached order details for order {order_id}")
+        return cached_data
     
     headers = {
         "Authorization": f"Token {LEAFTRADE_API_KEY}",
@@ -490,6 +499,9 @@ def get_order_details(order_id: str) -> Optional[Dict[str, Any]]:
             "order": order_response,
             "line_items": line_items
         }
+        
+        # Cache the result for 5 minutes (300 seconds)
+        cache_set(cache_key, order_details, ttl_seconds=300)
         
         logger.info(f"Successfully retrieved complete details for order {order_id}")
         return order_details

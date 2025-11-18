@@ -493,7 +493,6 @@ async function loadResources() {
             populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', allDrivers, 'name', 'id');
             populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', allDrivers, 'name', 'id');
         } else {
-            console.error('Error loading drivers:', driversData.error);
             populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', [], 'name', 'id');
             populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', [], 'name', 'id');
         }
@@ -505,12 +504,10 @@ async function loadResources() {
             allVehicles = vehiclesData.vehicles || [];
             populateSearchableDropdown('vehicle-search', 'vehicle-dropdown', 'vehicle', allVehicles, 'name', 'id');
         } else {
-            console.error('Error loading vehicles:', vehiclesData.error);
             populateSearchableDropdown('vehicle-search', 'vehicle-dropdown', 'vehicle', [], 'name', 'id');
         }
         
     } catch (error) {
-        console.error('Error loading resources:', error);
         // Set error states for all dropdowns
         populateSearchableDropdown('driver1-search', 'driver1-dropdown', 'driver1', [], 'name', 'id');
         populateSearchableDropdown('driver2-search', 'driver2-dropdown', 'driver2', [], 'name', 'id');
@@ -556,7 +553,6 @@ function populateSearchableDropdown(searchId, dropdownId, hiddenId, items, label
 // Legacy function for backward compatibility (if needed elsewhere)
 function populateSelect(selectId, items, labelKey, valueKey) {
     // This function is kept for backward compatibility but not used for the main dropdowns
-    console.log('populateSelect called for:', selectId);
 }
 
 // Handle form submission

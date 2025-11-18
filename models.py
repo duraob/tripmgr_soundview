@@ -29,7 +29,7 @@ class Trip(db.Model):
     vehicle_id = db.Column(db.Integer, db.ForeignKey('vehicle.id'))
     departure_time = db.Column(db.DateTime)
     estimated_completion_time = db.Column(db.DateTime)
-    route_data = db.Column(db.Text)  # JSON data from OpenAI route optimization (renamed from route_instructions)
+    route_data = db.Column(db.Text)  # JSON data from Google Maps route optimization (renamed from route_instructions)
     
     # Trip scheduling details
     approximate_start_time = db.Column(db.DateTime, nullable=True)
@@ -75,11 +75,6 @@ class TripOrder(db.Model):
     # Vendor relationship for BioTrack integration
     vendor_id = db.Column(db.Integer, db.ForeignKey('vendor.id'), nullable=True)
     vendor = db.relationship('Vendor', backref='trip_orders')
-    
-    # Email delivery status columns
-    manifest_attached = db.Column(db.Boolean, default=False)
-    invoice_attached = db.Column(db.Boolean, default=False)
-    email_ready = db.Column(db.Boolean, default=False)
     
     # Execution status tracking
     status = db.Column(db.String(20), default='pending')  # pending, sublotted, inventory_moved, manifested
@@ -170,30 +165,8 @@ class CustomerContact(db.Model):
     contact_name = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(200), nullable=False)
     is_primary = db.Column(db.Boolean, default=False)
-    email_invoice = db.Column(db.Boolean, default=True)  # Default to True for backward compatibility
-    email_manifest = db.Column(db.Boolean, default=True)  # Default to True for backward compatibility
     
     vendor = db.relationship('Vendor', backref='contacts')
-
-class TripOrderDocument(db.Model):
-    """Document storage for trip orders with compression"""
-    __tablename__ = 'trip_order_documents'
-    
-    id = db.Column(db.Integer, primary_key=True)
-    trip_order_id = db.Column(db.Integer, db.ForeignKey('trip_order.id'), nullable=False)
-    document_type = db.Column(db.String(20), nullable=False)  # 'manifest' or 'invoice'
-    document_data = db.Column(db.LargeBinary, nullable=False)  # Compressed PDF
-    uploaded_at = db.Column(db.DateTime, default=get_est_now_naive)
-    
-    trip_order = db.relationship('TripOrder', backref='documents')
-
-class InternalContact(db.Model):
-    """Internal contacts that get CC'd on all outgoing emails"""
-    id = db.Column(db.Integer, primary_key=True)
-    name = db.Column(db.String(200), nullable=False)
-    email = db.Column(db.String(200), nullable=False, unique=True)
-    is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now_naive)
 
 # Junction table for many-to-many relationship between trips and drivers
 trip_drivers = db.Table('trip_drivers',

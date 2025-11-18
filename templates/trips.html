@@ -361,7 +361,6 @@ async function viewErrorLogs() {
             alert('No recent error logs found');
         }
     } catch (error) {
-        console.error('Error fetching logs:', error);
         alert('Failed to fetch error logs');
     }
 }
@@ -470,7 +469,7 @@ async function loadTripsData() {
         tripsData = data.trips || data;
         renderTrips();
     } catch (error) {
-        console.error('Error loading trips data:', error);
+        // Silent error handling - user will see empty state
     }
 }
 

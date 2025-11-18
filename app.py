@@ -113,8 +113,6 @@ def setup_logging():
     loggers_config = {
         'api.biotrack': logging.INFO,
         'api.leaftrade': logging.INFO,
-        'api.openai_client': logging.INFO,
-        'api.email_service': logging.INFO,
         'flask': logging.WARNING,  # Reduce Flask noise in production
         'werkzeug': logging.WARNING,  # Reduce Werkzeug noise in production
         'sqlalchemy.engine': logging.WARNING,  # Reduce SQL noise in production
@@ -152,8 +150,16 @@ app.config['SECRET_KEY'] = os.getenv('SECRET_KEY', 'dev-secret-key-change-in-pro
 app.config['SQLALCHEMY_DATABASE_URI'] = os.getenv('DATABASE_URL', 'sqlite:///app.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
+# Connection pooling for local PostgreSQL (optimized for 2-3 users)
+app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
+    'pool_size': 5,        # Small pool for 2-3 users
+    'max_overflow': 10,    # Allow overflow for spikes
+    'pool_pre_ping': True, # Verify connections before use
+    'pool_recycle': 3600   # Recycle connections after 1 hour
+}
+
 # Import models and get db instance
-from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, InternalContact, GlobalPreference, TripExecution
+from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, GlobalPreference, TripExecution
 
 # Initialize extensions
 migrate = Migrate(app, db)
@@ -1774,7 +1780,7 @@ def export_contacts():
         writer = csv.writer(output)
         
         # Write header
-        writer.writerow(['Contact Name', 'Email', 'Vendor Name', 'Is Primary', 'Email Invoice', 'Email Manifest'])
+        writer.writerow(['Contact Name', 'Email', 'Vendor Name', 'Is Primary'])
         
         # Write data
         for contact in contacts:
@@ -1782,9 +1788,7 @@ def export_contacts():
                 contact.contact_name,
                 contact.email,
                 contact.vendor.name if contact.vendor else '',
-                'Yes' if contact.is_primary else 'No',
-                'Yes' if contact.email_invoice else 'No',
-                'Yes' if contact.email_manifest else 'No'
+                'Yes' if contact.is_primary else 'No'
             ])
         
         output.seek(0)
@@ -2442,169 +2446,6 @@ def validate_trip_endpoint(trip_id):
         logger.error(f"Error in validate_trip_endpoint: {str(e)}")
         return jsonify({'error': f'Error validating trip: {str(e)}'}), 500
 
-# Email Delivery System API Endpoints
-
-@app.route('/api/trip-orders/<int:trip_order_id>/documents', methods=['POST'])
-@login_required
-def upload_document(trip_order_id):
-    """Upload manifest or invoice document"""
-    try:
-        from utils.document_service import DocumentService
-        
-        file = request.files['document']
-        document_type = request.form['document_type']  # 'manifest' or 'invoice'
-        
-        if document_type not in ['manifest', 'invoice']:
-            return jsonify({'error': 'Invalid document type'}), 400
-        
-        if not file or not file.filename:
-            return jsonify({'error': 'No file provided'}), 400
-        
-        # Read file data
-        file_data = file.read()
-        
-        # Store document
-        document_service = DocumentService()
-        success = document_service.store_document(
-            trip_order_id, document_type, file_data
-        )
-        
-        if success:
-            return jsonify({'success': True, 'message': 'Document uploaded successfully'})
-        else:
-            return jsonify({'error': 'Failed to upload document'}), 500
-            
-    except Exception as e:
-        logger.error(f"Error uploading document: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/trip-orders/<int:trip_order_id>/send-email', methods=['POST'])
-@login_required
-def send_trip_order_email(trip_order_id):
-    """Send email for specific trip order"""
-    try:
-        from utils.document_service import DocumentService
-        from api.email_service import EmailService
-        
-        document_service = DocumentService()
-        email_service = EmailService()
-        
-        result = email_service.send_trip_order_email(trip_order_id, document_service)
-        
-        # Check if there was an error
-        if 'error' in result:
-            return jsonify({'error': result['error']}), 500
-        
-        # Create user-friendly message
-        messages = []
-        if result['invoice_sent']:
-            messages.append(f"Invoice email sent to {result['invoice_contacts']} contact(s)")
-        elif result['invoice_contacts'] == 0:
-            messages.append("No invoice contacts configured")
-        
-        if result['manifest_sent']:
-            messages.append(f"Manifest email sent to {result['manifest_contacts']} contact(s)")
-        elif result['manifest_contacts'] == 0:
-            messages.append("No manifest contacts configured")
-        
-        if not result['invoice_sent'] and not result['manifest_sent']:
-            return jsonify({'error': 'No emails sent - no contacts configured for this vendor'}), 400
-        
-        return jsonify({
-            'success': True, 
-            'message': '; '.join(messages),
-            'details': result
-        })
-    except Exception as e:
-        logger.error(f"Error sending email: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/trips/<int:trip_id>/send-bulk-emails', methods=['POST'])
-@login_required
-def send_bulk_trip_emails(trip_id):
-    """Send emails for all ready trip orders in trip"""
-    try:
-        from utils.document_service import DocumentService
-        from api.email_service import EmailService
-        from models import TripOrder
-        
-        document_service = DocumentService()
-        email_service = EmailService()
-        
-        ready_orders = TripOrder.query.filter_by(
-            trip_id=trip_id, email_ready=True
-        ).all()
-        
-        results = []
-        total_invoice_sent = 0
-        total_manifest_sent = 0
-        total_invoice_contacts = 0
-        total_manifest_contacts = 0
-        
-        for order in ready_orders:
-            result = email_service.send_trip_order_email(order.id, document_service)
-            results.append({
-                'order_id': order.order_id,
-                'invoice_sent': result.get('invoice_sent', False),
-                'manifest_sent': result.get('manifest_sent', False),
-                'invoice_contacts': result.get('invoice_contacts', 0),
-                'manifest_contacts': result.get('manifest_contacts', 0),
-                'error': result.get('error')
-            })
-            
-            # Aggregate totals
-            if result.get('invoice_sent'):
-                total_invoice_sent += 1
-            if result.get('manifest_sent'):
-                total_manifest_sent += 1
-            total_invoice_contacts += result.get('invoice_contacts', 0)
-            total_manifest_contacts += result.get('manifest_contacts', 0)
-        
-        # Create summary message
-        summary_messages = []
-        if total_invoice_sent > 0:
-            summary_messages.append(f"{total_invoice_sent} invoice email(s) sent to {total_invoice_contacts} total contact(s)")
-        if total_manifest_sent > 0:
-            summary_messages.append(f"{total_manifest_sent} manifest email(s) sent to {total_manifest_contacts} total contact(s)")
-        
-        return jsonify({
-            'success': True, 
-            'results': results,
-            'summary': {
-                'total_orders': len(results),
-                'invoice_emails_sent': total_invoice_sent,
-                'manifest_emails_sent': total_manifest_sent,
-                'total_invoice_contacts': total_invoice_contacts,
-                'total_manifest_contacts': total_manifest_contacts
-            },
-            'message': f'Processed {len(results)} orders. ' + '; '.join(summary_messages) if summary_messages else 'No emails sent'
-        })
-    except Exception as e:
-        logger.error(f"Error sending bulk emails: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/trip-orders/<int:trip_order_id>/documents/<document_type>', methods=['DELETE'])
-@login_required
-def delete_document(trip_order_id, document_type):
-    """Delete a document from trip order"""
-    try:
-        from utils.document_service import DocumentService
-        
-        if document_type not in ['manifest', 'invoice']:
-            return jsonify({'error': 'Invalid document type'}), 400
-        
-        document_service = DocumentService()
-        success = document_service.delete_document(trip_order_id, document_type)
-        
-        if success:
-            return jsonify({'success': True, 'message': 'Document deleted successfully'})
-        else:
-            return jsonify({'error': 'Failed to delete document'}), 500
-            
-    except Exception as e:
-        logger.error(f"Error deleting document: {e}")
-        return jsonify({'error': str(e)}), 500
-
 # Customer Contact Management API Endpoints
 
 @app.route('/api/contacts')
@@ -2624,9 +2465,7 @@ def get_contacts():
                 'vendor_name': contact.vendor.name,
                 'contact_name': contact.contact_name,
                 'email': contact.email,
-                'is_primary': contact.is_primary,
-                'email_invoice': contact.email_invoice,
-                'email_manifest': contact.email_manifest
+                'is_primary': contact.is_primary
             })
         
         return jsonify({'success': True, 'contacts': contacts_data})
@@ -2655,9 +2494,7 @@ def create_contact():
             vendor_id=data['vendor_id'],
             contact_name=data['contact_name'],
             email=data['email'],
-            is_primary=data.get('is_primary', False),
-            email_invoice=data.get('email_invoice', True),
-            email_manifest=data.get('email_manifest', True)
+            is_primary=data.get('is_primary', False)
         )
         
         db.session.add(contact)
@@ -2694,10 +2531,6 @@ def update_contact(contact_id):
             contact.email = data['email']
         if 'is_primary' in data:
             contact.is_primary = data['is_primary']
-        if 'email_invoice' in data:
-            contact.email_invoice = data['email_invoice']
-        if 'email_manifest' in data:
-            contact.email_manifest = data['email_manifest']
         
         db.session.commit()
         
@@ -2727,130 +2560,6 @@ def delete_contact(contact_id):
     except Exception as e:
         db.session.rollback()
         logger.error(f"Error deleting contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
-# Internal Contacts API endpoints
-@app.route('/api/internal-contacts')
-@login_required
-def get_internal_contacts():
-    """Get all internal contacts"""
-    try:
-        contacts = InternalContact.query.order_by(InternalContact.name).all()
-        return jsonify([{
-            'id': contact.id,
-            'name': contact.name,
-            'email': contact.email,
-            'is_active': contact.is_active,
-            'created_at': contact.created_at.isoformat() if contact.created_at else None
-        } for contact in contacts])
-    except Exception as e:
-        logger.error(f"Error getting internal contacts: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/internal-contacts', methods=['POST'])
-@login_required
-def create_internal_contact():
-    """Create a new internal contact"""
-    try:
-        data = request.get_json()
-        
-        if not data or not data.get('name') or not data.get('email'):
-            return jsonify({'error': 'Name and email are required'}), 400
-        
-        # Check if email already exists
-        existing_contact = InternalContact.query.filter_by(email=data['email']).first()
-        if existing_contact:
-            return jsonify({'error': 'Email already exists'}), 400
-        
-        contact = InternalContact(
-            name=data['name'],
-            email=data['email'],
-            is_active=data.get('is_active', True)
-        )
-        
-        db.session.add(contact)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Internal contact created successfully',
-            'contact': {
-                'id': contact.id,
-                'name': contact.name,
-                'email': contact.email,
-                'is_active': contact.is_active,
-                'created_at': contact.created_at.isoformat()
-            }
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error creating internal contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/internal-contacts/<int:contact_id>', methods=['PUT'])
-@login_required
-def update_internal_contact(contact_id):
-    """Update an internal contact"""
-    try:
-        contact = InternalContact.query.get(contact_id)
-        if not contact:
-            return jsonify({'error': 'Internal contact not found'}), 404
-        
-        data = request.get_json()
-        if not data:
-            return jsonify({'error': 'No data provided'}), 400
-        
-        # Check if email already exists (excluding current contact)
-        if 'email' in data and data['email'] != contact.email:
-            existing_contact = InternalContact.query.filter_by(email=data['email']).first()
-            if existing_contact:
-                return jsonify({'error': 'Email already exists'}), 400
-        
-        # Update fields
-        if 'name' in data:
-            contact.name = data['name']
-        if 'email' in data:
-            contact.email = data['email']
-        if 'is_active' in data:
-            contact.is_active = data['is_active']
-        
-        db.session.commit()
-        
-        return jsonify({
-            'success': True,
-            'message': 'Internal contact updated successfully',
-            'contact': {
-                'id': contact.id,
-                'name': contact.name,
-                'email': contact.email,
-                'is_active': contact.is_active,
-                'created_at': contact.created_at.isoformat()
-            }
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error updating internal contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/internal-contacts/<int:contact_id>', methods=['DELETE'])
-@login_required
-def delete_internal_contact(contact_id):
-    """Delete an internal contact"""
-    try:
-        contact = InternalContact.query.get(contact_id)
-        if not contact:
-            return jsonify({'error': 'Internal contact not found'}), 404
-        
-        db.session.delete(contact)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': 'Internal contact deleted successfully'})
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error deleting internal contact: {e}")
         return jsonify({'error': str(e)}), 500
 
 # Global Preferences API endpoints
@@ -3013,14 +2722,6 @@ def clear_selected_rooms():
 def contacts():
     """Customer contacts management page"""
     return render_template('contacts.html')
-
-
-
-
-
-
-
-
 
 # Simplified Report Generation Endpoints
 @app.route('/api/inventory-report/generate-simple', methods=['POST'])

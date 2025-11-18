@@ -6,11 +6,9 @@ Flask-Migrate==4.0.5
 psycopg2-binary
 python-dotenv==1.0.0
 requests==2.31.0
-openai
 Werkzeug==2.3.7
 email-validator==2.0.0
 gunicorn==21.2.0
-msal==1.24.1 
 tzdata
 redis==5.0.1
 rq==1.15.1
