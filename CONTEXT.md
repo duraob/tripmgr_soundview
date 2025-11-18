@@ -5,7 +5,23 @@ The application is a Flask-based trip management system for cannabis delivery op
 
 ## Recent Updates
 
-### Trip Execution Duplicate Key Fix (Latest)
+### EST Timezone Fix for Database Timestamps (Latest)
+- **Issue**: Timestamps were showing 5 hours ahead (UTC instead of EST) when stored in database
+- **Root Cause**: PostgreSQL DateTime columns store timezone-aware datetimes as UTC, causing display issues
+- **Solution**: Created `get_est_now_naive()` function that returns naive datetime in EST for database storage
+  - All model defaults now use `get_est_now_naive()` instead of `get_est_now()`
+  - All explicit datetime assignments for database storage use `get_est_now_naive()`
+  - `get_est_now()` still available for timezone-aware operations (API responses, calculations)
+- **Files Updated**: 
+  - `utils/timezone.py`: Added `get_est_now_naive()` function
+  - `models.py`: Updated all DateTime defaults to use `get_est_now_naive()`
+  - `app.py`: Updated explicit datetime assignments to use `get_est_now_naive()`
+  - `utils/trip_execution.py`: Updated datetime assignments to use `get_est_now_naive()`
+- **Calculation Fix**: Updated elapsed time calculation to handle naive/timezone-aware datetime comparison
+- **Minimal Code**: Following .cursorrules - added single helper function, updated existing calls
+- **Production Ready**: All timestamps now stored and displayed correctly in EST/EDT
+
+### Trip Execution Duplicate Key Fix
 - **Issue**: Fixed duplicate key violation error when executing trips with existing TripExecution records
 - **Root Cause**: Race condition where query didn't find existing record, causing INSERT to fail on unique constraint
 - **Solution**: Added IntegrityError handling in `_update_trip_execution_status()` function

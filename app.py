@@ -432,7 +432,7 @@ def new_trip():
                 approximate_start_time=approximate_start_time,
                 created_by=current_user.id,
                 status='pending',
-                date_created=get_est_now()
+                date_created=get_est_now_naive()
             )
             
             logger.debug(f"Created trip object: driver1={data['driver1_id']}, driver2={data['driver2_id']}, vehicle={data['vehicle_id']}")
@@ -664,8 +664,8 @@ def execute_trip(trip_id):
             db.session.add(execution)
         
         # Set started_at timestamp when execute button is clicked
-        from utils.timezone import get_est_now
-        execution.started_at = get_est_now()
+        from utils.timezone import get_est_now_naive
+        execution.started_at = get_est_now_naive()
         execution.status = 'processing'
         execution.general_error = None  # Clear any previous general errors
         
@@ -720,7 +720,10 @@ def get_trip_execution_status(trip_id):
             progress_percentage = 0
         elif execution.status == 'processing':
             # Calculate progress based on time elapsed
-            elapsed_seconds = (get_est_now() - execution.created_at).total_seconds()
+            from utils.timezone import ensure_est_timezone
+            now_est = get_est_now()
+            created_est = ensure_est_timezone(execution.created_at) if execution.created_at else now_est
+            elapsed_seconds = (now_est - created_est).total_seconds()
             
             # Progress over time: 0-60 seconds = 10-50%, 60+ seconds = 50-90%
             if elapsed_seconds < 60:
@@ -1664,7 +1667,8 @@ def update_mapping(mapping_id):
         if 'is_active' in data:
             mapping.is_active = data['is_active']
         
-        mapping.updated_at = get_est_now()
+        from utils.timezone import get_est_now_naive
+        mapping.updated_at = get_est_now_naive()
         db.session.commit()
         
         return jsonify({
@@ -1988,6 +1992,7 @@ def refresh_biotrack_data():
 def process_order_sublots(leaftrade_order_id: str, target_room_id: str = None) -> dict:
     """
     Process a single LeafTrade order for sublot creation and movement.
+    Filters out invalid BioTrack UIDs (non-16-digit batch numbers) before processing.
     
     Args:
         leaftrade_order_id: LeafTrade order ID to process
@@ -1999,6 +2004,8 @@ def process_order_sublots(leaftrade_order_id: str, target_room_id: str = None) -
             'order_id': str,
             'sublots_created': list,  # New barcode IDs
             'room_moved_to': str,
+            'valid_items_processed': int,  # Count of valid items processed
+            'invalid_items_skipped': int,  # Count of invalid items skipped
             'error': str (if failed)
         }
     """
@@ -2006,7 +2013,7 @@ def process_order_sublots(leaftrade_order_id: str, target_room_id: str = None) -
     
     try:
         # Initialize BioTrack API
-        from api.biotrack import get_auth_token, post_sublot, post_sublot_move
+        from api.biotrack import get_auth_token, post_sublot_bulk_create, post_sublot_move
         from api.leaftrade import get_order_details
         
         # Authenticate with BioTrack
@@ -2057,37 +2064,63 @@ def process_order_sublots(leaftrade_order_id: str, target_room_id: str = None) -
         # Process line items for sublot creation
         line_items = order_details.get('line_items', [])
         sublot_data = []
+        invalid_uid_count = 0
         
         for line_item in line_items:
-            barcode_id = line_item.get('barcode_id')
+            barcode_id = line_item.get('barcode_id')  # batch_ref from LeafTrade
             quantity = line_item.get('quantity', 1)
-            if barcode_id:
+            
+            # Only process line items with valid BioTrack UIDs (16-digit numbers)
+            if barcode_id and _is_valid_biotrack_uid(barcode_id):
                 sublot_data.append({
                     'barcodeid': barcode_id,
                     'remove_quantity': str(quantity)
                 })
+            elif barcode_id:
+                invalid_uid_count += 1
+                logger.warning(f"Skipping invalid BioTrack UID: {barcode_id} (not 16 digits)")
+        
+        # Log summary of filtered items
+        if invalid_uid_count > 0:
+            logger.info(f"Filtered out {invalid_uid_count} line items with invalid BioTrack UIDs")
         
         if not sublot_data:
             return {
                 'success': False,
                 'order_id': leaftrade_order_id,
-                'error': 'No barcode IDs found in line items'
+                'error': 'No valid BioTrack UIDs found in line items' if invalid_uid_count > 0 else 'No barcode IDs found in line items',
+                'invalid_items_skipped': invalid_uid_count
             }
         
         # Create sublots
-        new_barcode_ids = post_sublot(token, "bulk_create", sublot_data)
-        if new_barcode_ids is None:
+        sublot_result = post_sublot_bulk_create(token, sublot_data)
+        
+        # Check if sublot creation returned an error response
+        if isinstance(sublot_result, dict) and not sublot_result.get('success', True):
+            error_msg = f"BioTrack sublot creation failed: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})"
+            logger.error(f"Sublot creation failed for order {leaftrade_order_id}: {error_msg}")
             return {
                 'success': False,
                 'order_id': leaftrade_order_id,
-                'error': 'Failed to create sublots'
+                'error': f"BioTrack Error: {sublot_result.get('error', 'Unknown error')} (Code: {sublot_result.get('errorcode', 'Unknown')})",
+                'invalid_items_skipped': invalid_uid_count
             }
         
+        if sublot_result is None:
+            return {
+                'success': False,
+                'order_id': leaftrade_order_id,
+                'error': 'Failed to create sublots',
+                'invalid_items_skipped': invalid_uid_count
+            }
+        
+        new_barcode_ids = sublot_result
         if not new_barcode_ids:
             return {
                 'success': False,
                 'order_id': leaftrade_order_id,
-                'error': 'No barcode IDs returned from sublot creation'
+                'error': 'No barcode IDs returned from sublot creation',
+                'invalid_items_skipped': invalid_uid_count
             }
         
         # Move sublots to room
@@ -2112,7 +2145,8 @@ def process_order_sublots(leaftrade_order_id: str, target_room_id: str = None) -
             'order_id': leaftrade_order_id,
             'sublots_created': new_barcode_ids,
             'room_moved_to': room_id,
-            'line_items_processed': len(sublot_data),
+            'valid_items_processed': len(sublot_data),
+            'invalid_items_skipped': invalid_uid_count,
             'customer_name': order_details.get('order', {}).get('dispensary_location', {}).get('dispensary', {}).get('name', 'Unknown')
         }
         

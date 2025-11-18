@@ -1,7 +1,7 @@
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import UserMixin
 from datetime import datetime, UTC
-from utils.timezone import get_est_now
+from utils.timezone import get_est_now_naive
 
 db = SQLAlchemy()
 
@@ -12,14 +12,14 @@ class User(UserMixin, db.Model):
     email = db.Column(db.String(120), unique=True, nullable=False)
     password_hash = db.Column(db.String(255), nullable=False)
     role = db.Column(db.String(20), default='user')  # admin, user
-    created_at = db.Column(db.DateTime, default=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
     is_active = db.Column(db.Boolean, default=True)
 
 class Trip(db.Model):
     """Trip model representing a delivery trip"""
     id = db.Column(db.Integer, primary_key=True)
     status = db.Column(db.String(20), default='pending')  # pending, completed
-    date_created = db.Column(db.DateTime, default=get_est_now)
+    date_created = db.Column(db.DateTime, default=get_est_now_naive)
     date_transacted = db.Column(db.DateTime)
     created_by = db.Column(db.Integer, db.ForeignKey('user.id'))
     
@@ -58,8 +58,8 @@ class Order(db.Model):
     customer_contact = db.Column(db.String(200))
     customer_location = db.Column(db.String(500))
     order_status = db.Column(db.String(50), default='pending')
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
 
 class TripOrder(db.Model):
     """Trip orders junction table with sequence and room override"""
@@ -69,7 +69,7 @@ class TripOrder(db.Model):
     sequence_order = db.Column(db.Integer, nullable=False)
     room_override = db.Column(db.String(255))  # BioTrack room override
     manifest_id = db.Column(db.String(255))  # BioTrack manifest ID
-    created_at = db.Column(db.DateTime, default=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
     address = db.Column(db.String(500)) # Address of the dispensary
     
     # Vendor relationship for BioTrack integration
@@ -107,8 +107,8 @@ class Vendor(db.Model):
     license_info = db.Column(db.String(500))
     ubi = db.Column(db.String(100))  # UBI for manifest creation
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
 
 class Room(db.Model):
     """Room model representing BioTrack rooms"""
@@ -116,8 +116,8 @@ class Room(db.Model):
     biotrack_room_id = db.Column(db.String(100), unique=True)
     name = db.Column(db.String(200), nullable=False)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
 
 class Customer(db.Model):
     """Customer model representing LeafTrade customers"""
@@ -132,8 +132,8 @@ class Customer(db.Model):
     country = db.Column(db.String(100))
     phone = db.Column(db.String(50))
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
 
 class LocationMapping(db.Model):
     """Mapping between LeafTrade dispensary locations and BioTrack vendors/rooms"""
@@ -143,8 +143,8 @@ class LocationMapping(db.Model):
     biotrack_vendor_id = db.Column(db.String(100), nullable=False)
     default_biotrack_room_id = db.Column(db.String(100))
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
     
     # Relationships
     customer = db.relationship('Customer', backref='location_mappings')
@@ -155,11 +155,11 @@ class APIRefreshLog(db.Model):
     """Track when API data was last refreshed"""
     id = db.Column(db.Integer, primary_key=True)
     api_name = db.Column(db.String(50), nullable=False)  # 'drivers', 'vehicles', 'orders'
-    last_refresh = db.Column(db.DateTime, default=get_est_now)
+    last_refresh = db.Column(db.DateTime, default=get_est_now_naive)
     records_count = db.Column(db.Integer, default=0)
     status = db.Column(db.String(20), default='success')  # 'success', 'error'
     error_message = db.Column(db.Text)
-    created_at = db.Column(db.DateTime, default=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
     
     __table_args__ = (db.UniqueConstraint('api_name', name='unique_api_name'),)
 
@@ -183,7 +183,7 @@ class TripOrderDocument(db.Model):
     trip_order_id = db.Column(db.Integer, db.ForeignKey('trip_order.id'), nullable=False)
     document_type = db.Column(db.String(20), nullable=False)  # 'manifest' or 'invoice'
     document_data = db.Column(db.LargeBinary, nullable=False)  # Compressed PDF
-    uploaded_at = db.Column(db.DateTime, default=get_est_now)
+    uploaded_at = db.Column(db.DateTime, default=get_est_now_naive)
     
     trip_order = db.relationship('TripOrder', backref='documents')
 
@@ -193,7 +193,7 @@ class InternalContact(db.Model):
     name = db.Column(db.String(200), nullable=False)
     email = db.Column(db.String(200), nullable=False, unique=True)
     is_active = db.Column(db.Boolean, default=True)
-    created_at = db.Column(db.DateTime, default=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
 
 # Junction table for many-to-many relationship between trips and drivers
 trip_drivers = db.Table('trip_drivers',
@@ -209,8 +209,8 @@ class TripExecution(db.Model):
     status = db.Column(db.String(20), default='pending')  # pending, processing, completed, failed
     progress_message = db.Column(db.Text)
     job_id = db.Column(db.String(100))  # RQ job ID
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)
     started_at = db.Column(db.DateTime, nullable=True)  # When execute button was clicked
     completed_at = db.Column(db.DateTime, nullable=True)  # When execution finished
     general_error = db.Column(db.Text, nullable=True)  # General trip-level errors
@@ -220,5 +220,5 @@ class GlobalPreference(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     preference_key = db.Column(db.String(255), unique=True, nullable=False)
     preference_value = db.Column(db.Text, nullable=False)
-    created_at = db.Column(db.DateTime, default=get_est_now)
-    updated_at = db.Column(db.DateTime, default=get_est_now, onupdate=get_est_now)
+    created_at = db.Column(db.DateTime, default=get_est_now_naive)
+    updated_at = db.Column(db.DateTime, default=get_est_now_naive, onupdate=get_est_now_naive)

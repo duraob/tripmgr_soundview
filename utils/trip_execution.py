@@ -9,7 +9,7 @@ from datetime import datetime
 
 from sqlalchemy.exc import IntegrityError
 from models import db, Trip, TripOrder, Driver, Vehicle, TripExecution
-from utils.timezone import get_est_now
+from utils.timezone import get_est_now, get_est_now_naive
 import re
 
 def _is_valid_biotrack_uid(barcode_id):
@@ -182,7 +182,7 @@ def execute_trip_background_job(trip_id):
                 _update_trip_execution_status(trip_id, 'completed', f'Trip partially completed: {len(successful_orders)} orders succeeded, {len(failed_orders)} failed')
                 trip.status = 'partially_completed'
                 trip.execution_status = 'completed'
-                trip.date_transacted = get_est_now()
+                trip.date_transacted = get_est_now_naive()
                 db.session.commit()
             elif failed_orders:
                 # All orders failed
@@ -195,7 +195,7 @@ def execute_trip_background_job(trip_id):
                 _update_trip_execution_status(trip_id, 'completed', 'Trip execution completed successfully')
                 trip.status = 'completed'
                 trip.execution_status = 'completed'
-                trip.date_transacted = get_est_now()
+                trip.date_transacted = get_est_now_naive()
                 db.session.commit()
             
             print(f"=== RQ TRIP EXECUTION COMPLETED ===")
@@ -238,17 +238,17 @@ def _update_trip_execution_status(trip_id, status, progress_message=None):
             if execution:
                 execution.status = status
                 execution.progress_message = progress_message
-                execution.updated_at = get_est_now()
+                execution.updated_at = get_est_now_naive()
                 if status in ['completed', 'failed']:
-                    execution.completed_at = get_est_now()
+                    execution.completed_at = get_est_now_naive()
                 db.session.commit()
     else:
         execution.status = status
         execution.progress_message = progress_message
-        execution.updated_at = get_est_now()
+        execution.updated_at = get_est_now_naive()
         
         if status in ['completed', 'failed']:
-            execution.completed_at = get_est_now()
+            execution.completed_at = get_est_now_naive()
         
         db.session.commit()
 

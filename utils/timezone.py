@@ -73,3 +73,16 @@ def ensure_est_timezone(dt):
         # Already timezone-aware - convert to Eastern time
         return dt.astimezone(US_EASTERN_TZ)
 
+def get_est_now_naive():
+    """
+    Get current time in EST/EDT as naive datetime for database storage.
+    PostgreSQL DateTime columns store naive datetimes, so we need to strip timezone info
+    while preserving the EST/EDT time value.
+    
+    Returns:
+        naive datetime representing current time in EST/EDT
+    """
+    est_dt = datetime.now(US_EASTERN_TZ)
+    # Return naive datetime with EST time values (timezone info removed)
+    return est_dt.replace(tzinfo=None)
+
