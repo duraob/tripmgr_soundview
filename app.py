@@ -8,7 +8,7 @@ import json
 import logging
 import time
 from datetime import datetime, UTC, timedelta, timezone
-from utils.timezone import get_est_now
+from utils.timezone import get_est_now, get_est_now_naive
 from dotenv import load_dotenv
 
 # Load environment variables
