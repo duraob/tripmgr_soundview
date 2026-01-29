@@ -642,7 +642,7 @@ def execute_trip(trip_id):
     try:
         trip = Trip.query.get_or_404(trip_id)
         
-        if trip.status == 'completed':
+        if trip.status in ['completed', 'closed']:
             return jsonify({'error': 'Trip is not in pending or validated status'}), 400
         
         if trip.execution_status == 'processing':
@@ -818,8 +818,8 @@ def toggle_trip_status(trip_id):
         data = request.get_json()
         new_status = data.get('new_status')
         
-        if new_status not in ['pending', 'completed', 'validated']:
-            return jsonify({'error': 'Invalid status. Must be "pending", "validated" or "completed"'}), 400
+        if new_status not in ['pending', 'completed', 'validated', 'partially_completed', 'closed']:
+            return jsonify({'error': 'Invalid status. Must be "pending", "validated", "completed", "partially_completed", or "closed"'}), 400
         
         # Update trip status
         old_status = trip.status

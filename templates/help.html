@@ -21,6 +21,7 @@
                 <a href="#new-trip" class="text-blue-600 hover:text-blue-800 text-sm font-medium">New Trip</a>
                 <a href="#trip-validation" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Trip Validation</a>
                 <a href="#trip-execution" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Trip Execution</a>
+                <a href="#trip-status" class="text-blue-600 hover:text-blue-800 text-sm font-medium">Trip Status</a>
             </div>
         </div>
 
@@ -108,7 +109,6 @@
                     <li>• Set email preferences for each contact (Invoice, Manifest, or Both)</li>
                     <li>• Mark the main person at each dispensary as "Primary Contact"</li>
                     <li>• Use search and filters to find contacts quickly</li>
-                    <li>• Export your contact list from the Configuration page</li>
                 </ul>
             </div>
             
@@ -231,7 +231,53 @@
                 <ul class="text-green-800 space-y-1 text-sm">
                     <li>• Check the Trips page to see all your created trips</li>
                     <li>• View trip details to see the full route and order information</li>
-                    <li>• Update trip status as deliveries are completed</li>
+                    <li>• Update trip status as deliveries are completed (see <a href="#trip-status" class="text-blue-600 hover:text-blue-800 underline">Trip Status Management</a> section)</li>
+                </ul>
+            </div>
+        </div>
+
+        <!-- Trip Status Management Section -->
+        <div id="trip-status" class="bg-white rounded-lg shadow-sm border border-gray-200 p-6 mb-6">
+            <div class="flex items-center mb-4">
+                <div class="w-8 h-8 bg-teal-100 rounded-lg flex items-center justify-center mr-3">
+                    <svg class="w-5 h-5 text-teal-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01"></path>
+                    </svg>
+                </div>
+                <h2 class="text-xl font-semibold text-gray-900">Trip Status Management</h2>
+            </div>
+            <p class="text-gray-700 mb-4">Manage trip statuses using the dropdown menu on the trips dashboard or trip detail page.</p>
+            
+            <div class="bg-blue-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-blue-900 mb-2">How to Change Status:</h3>
+                <ul class="text-blue-800 space-y-1 text-sm">
+                    <li>• On the <strong>Trips Dashboard:</strong> Use the dropdown menu next to the status badge in the table</li>
+                    <li>• On the <strong>Trip Detail Page:</strong> Use the dropdown menu next to the status badge in the status section</li>
+                    <li>• Select the desired status from the dropdown</li>
+                    <li>• Confirm the change when prompted</li>
+                    <li>• The page will refresh to show the updated status</li>
+                </ul>
+            </div>
+            
+            <div class="bg-green-50 rounded-lg p-4 mb-4">
+                <h3 class="font-medium text-green-900 mb-2">Available Statuses:</h3>
+                <ul class="text-green-800 space-y-2 text-sm">
+                    <li><strong>Pending</strong> (Yellow badge) - Trip is created but not yet validated. Execute button is available.</li>
+                    <li><strong>Validated</strong> (Orange badge) - Trip has been validated and is ready for execution. Execute button is available.</li>
+                    <li><strong>Completed</strong> (Blue badge) - Trip has been fully executed and all deliveries completed. Execute button is hidden.</li>
+                    <li><strong>Partially Completed</strong> (Orange badge) - Some deliveries completed but not all. Execute button is hidden.</li>
+                    <li><strong>Closed</strong> (Gray badge) - Trip was cancelled or is no longer needed. Execute button is hidden to prevent accidental execution.</li>
+                </ul>
+            </div>
+            
+            <div class="bg-yellow-50 rounded-lg p-4">
+                <h3 class="font-medium text-yellow-900 mb-2">Important Notes:</h3>
+                <ul class="text-yellow-800 space-y-1 text-sm">
+                    <li>• The <strong>Execute</strong> button only appears for trips with "Pending" or "Validated" status</li>
+                    <li>• Use <strong>Closed</strong> status for trips created by accident or no longer needed</li>
+                    <li>• Closed trips cannot be executed - this prevents accidental processing</li>
+                    <li>• You can change a trip's status at any time using the dropdown menu</li>
+                    <li>• Status changes are saved immediately after confirmation</li>
                 </ul>
             </div>
         </div>
