@@ -752,6 +752,37 @@ def get_trip_execution_status(trip_id):
     except Exception as e:
         return jsonify({'error': f'Failed to get trip execution status: {str(e)}'}), 500
 
+@app.route('/api/trips/<int:trip_id>/drivers', methods=['PATCH'])
+@login_required
+def update_trip_drivers(trip_id):
+    """Update drivers for a trip. Allowed only when trip status is pending."""
+    trip = Trip.query.get_or_404(trip_id)
+    if trip.status != 'pending':
+        return jsonify({'error': 'Drivers can only be changed when the trip is pending.'}), 400
+    data = request.get_json() or {}
+    driver1_biotrack_id = (data.get('driver1_id') or '').strip() or None
+    driver2_biotrack_id = (data.get('driver2_id') or '').strip() or None
+    if not driver1_biotrack_id:
+        return jsonify({'error': 'Driver 1 is required.'}), 400
+    if driver2_biotrack_id and driver1_biotrack_id == driver2_biotrack_id:
+        return jsonify({'error': 'Driver 1 and Driver 2 must be different.'}), 400
+    driver1 = db.session.query(Driver).filter_by(biotrack_id=driver1_biotrack_id).first()
+    if not driver1:
+        return jsonify({'error': f'Driver 1 (id {driver1_biotrack_id}) not found.'}), 400
+    driver2 = None
+    if driver2_biotrack_id:
+        driver2 = db.session.query(Driver).filter_by(biotrack_id=driver2_biotrack_id).first()
+        if not driver2:
+            return jsonify({'error': f'Driver 2 (id {driver2_biotrack_id}) not found.'}), 400
+    try:
+        trip.driver1_id = driver1.id
+        trip.driver2_id = driver2.id if driver2 else None
+        db.session.commit()
+        return jsonify({'success': True, 'message': 'Drivers updated.'})
+    except Exception as e:
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
 @app.route('/trips/<int:trip_id>/progress')
 @login_required
 def trip_progress(trip_id):
@@ -843,15 +874,54 @@ def toggle_trip_status(trip_id):
         return jsonify({'error': f'Trip status toggle failed: {str(e)}'}), 500
 
 
+def _order_total_usable_weight(order_details, inventory_data):
+    """
+    Compute total usable weight for an order: for each line item, match LeafTrade batch_ref
+    (in line_item as barcode_id) to BioTrack inventory id, then sum units * med_usableweight.
+    """
+    if not order_details or not inventory_data:
+        return 0.0
+    # Build lookup by string id so batch_ref (barcode_id) matches regardless of key type
+    inv_by_id = {}
+    for item_id, item in inventory_data.items():
+        key = str(item_id).strip()
+        inv_by_id[key] = item
+    total = 0.0
+    for line_item in order_details.get('line_items', []):
+        # LeafTrade batch_ref is exposed as barcode_id (spaces removed in leaftrade module)
+        batch_ref = line_item.get('barcode_id')
+        if batch_ref is None or batch_ref == '':
+            continue
+        batch_ref = str(batch_ref).replace(' ', '').strip()
+        units = line_item.get('quantity', 0)
+        try:
+            units = int(units)
+        except (TypeError, ValueError):
+            units = 0
+        inv_item = inv_by_id.get(batch_ref)
+        if not inv_item and batch_ref.isdigit():
+            inv_item = inventory_data.get(int(batch_ref))
+        if not inv_item:
+            continue
+        med_val = inv_item.get('med_usableweight') or inv_item.get('med_usable_weight')
+        try:
+            med = float(med_val) if med_val not in (None, '') else 0.0
+        except (TypeError, ValueError):
+            med = 0.0
+        total += units * med
+    return round(total, 2)
+
+
 @app.route('/api/orders')
 @login_required
 def get_orders():
-    """API endpoint to get orders from LeafTrade"""
+    """API endpoint to get orders from LeafTrade with total_usable_weight from BioTrack sync_inventory."""
     logger = logging.getLogger('app.api.orders')
     logger.info(f"Fetching orders with status: {request.args.get('status', 'approved')}")
     
     try:
-        from api.leaftrade import get_orders as leaftrade_get_orders
+        from api.leaftrade import get_orders as leaftrade_get_orders, get_order_details as leaftrade_get_order_details
+        from api.biotrack import get_auth_token, get_inventory_info
         
         # Get status from query parameter, default to 'approved'
         status = request.args.get('status', 'approved')
@@ -874,12 +944,46 @@ def get_orders():
                     'customer_name': order_info.get('customer_name', 'Unknown Customer'),
                     'customer_location': order_info.get('customer_location', 'Unknown Location'),
                     'delivery_date': order_info.get('delivery_date', 'Not specified'),
-                    'dispensary_id': order_info.get('dispensary_id')
+                    'dispensary_id': order_info.get('dispensary_id'),
+                    'total_usable_weight': 0.0
                 }
                 orders_array.append(order_array_item)
         
+        # Aggregate pull: BioTrack inventory once, then per-order details for usable weight
+        try:
+            token = get_auth_token()
+            inventory_data = get_inventory_info(token) if token else None
+        except Exception as e:
+            logger.warning(f"BioTrack inventory unavailable for usable weight: {e}")
+            inventory_data = None
+        
+        order_weights = {}
+        if inventory_data:
+            for order_array_item in orders_array:
+                try:
+                    details = leaftrade_get_order_details(order_array_item['id'])
+                    w = _order_total_usable_weight(details, inventory_data)
+                    val = float(w)
+                    order_array_item['total_usable_weight'] = val
+                    order_weights[str(order_array_item['id'])] = val
+                except Exception as e:
+                    logger.debug(f"Order {order_array_item['id']} details failed for usable weight: {e}")
+                    order_array_item['total_usable_weight'] = 0.0
+                    order_weights[str(order_array_item['id'])] = 0.0
+        else:
+            for order_array_item in orders_array:
+                order_weights[str(order_array_item['id'])] = 0.0
+
+        if orders_array:
+            o0 = orders_array[0]
+            logger.info(
+                "get_orders weights: sample order_id=%s total_usable_weight=%s order_weights_keys=%s",
+                o0.get('id'),
+                o0.get('total_usable_weight'),
+                list(order_weights.keys())[:3] if order_weights else [],
+            )
         logger.info(f"Successfully fetched and formatted {len(orders_array)} orders for frontend")
-        return jsonify({'orders': orders_array})
+        return jsonify({'orders': orders_array, 'order_weights': order_weights})
         
     except Exception as e:
         logger.error(f"Exception in get_orders: {str(e)}", exc_info=True)
@@ -892,9 +996,10 @@ def get_orders():
                 'customer_location': 'Budr - Danbury MILL PLAIN RD - MED - 2025-08-01',
                 'delivery_date': '2025-08-01',
                 'dispensary_id': '1280',
+                'total_usable_weight': 0.0,
             }
         ]
-        return jsonify({'orders': mock_orders})
+        return jsonify({'orders': mock_orders, 'order_weights': {'1043337': 0.0}})
 
 @app.route('/api/orders/<order_id>/details')
 @login_required
@@ -920,6 +1025,98 @@ def get_order_details(order_id):
     except Exception as e:
         logger.error(f"Exception in get_order_details: {str(e)}", exc_info=True)
         return jsonify({'error': 'Failed to fetch order details'}), 500
+
+
+@app.route('/api/cache/clear', methods=['POST'])
+@login_required
+def clear_cache():
+    """Clear in-memory cache (LeafTrade order details). Next Load Orders will re-fetch from APIs."""
+    try:
+        from utils.cache import clear as cache_clear
+        cache_clear()
+        logger = logging.getLogger('app.api.cache')
+        logger.info("In-memory cache cleared")
+        return jsonify({'ok': True, 'message': 'Cache cleared. Next Load Orders will fetch fresh data.'})
+    except Exception as e:
+        logger = logging.getLogger('app.api.cache')
+        logger.error(f"Cache clear failed: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
+
+@app.route('/api/orders/weight-debug')
+@login_required
+def orders_weight_debug():
+    """
+    Debug one order's usable weight: line items, batch_ref, BioTrack match, med_usableweight.
+    Query: order_id (optional; uses first order from approved list if omitted).
+    """
+    logger = logging.getLogger('app.api.orders_weight_debug')
+    try:
+        from api.leaftrade import get_orders as leaftrade_get_orders, get_order_details as leaftrade_get_order_details
+        from api.biotrack import get_auth_token, get_inventory_info
+
+        order_id = request.args.get('order_id')
+        if not order_id:
+            orders_data = leaftrade_get_orders(status='approved')
+            if not orders_data or not isinstance(orders_data, dict):
+                return jsonify({'error': 'No orders', 'hint': 'Supply ?order_id=1201174'}), 400
+            order_id = next(iter(orders_data))
+
+        token = get_auth_token()
+        inventory_data = get_inventory_info(token) if token else None
+        if not inventory_data:
+            return jsonify({
+                'order_id': order_id,
+                'error': 'No BioTrack inventory',
+                'hint': 'Check BioTrack auth and sync_inventory'
+            }), 200
+
+        inv_by_id = {str(iid).strip(): it for iid, it in inventory_data.items()}
+        details = leaftrade_get_order_details(order_id)
+        if not details:
+            return jsonify({'order_id': order_id, 'error': 'No order details from LeafTrade'}), 200
+
+        line_items = details.get('line_items', [])
+        breakdown = []
+        order_total = 0.0
+        sample_biotrack_ids = list(inv_by_id.keys())[:3]
+
+        for li in line_items:
+            batch_ref = li.get('barcode_id') or ''
+            batch_ref = str(batch_ref).replace(' ', '').strip()
+            units = int(li.get('quantity') or 0)
+            inv_item = inv_by_id.get(batch_ref)
+            if not inv_item and batch_ref.isdigit():
+                inv_item = inventory_data.get(int(batch_ref))
+            matched = inv_item is not None
+            med = 0.0
+            if inv_item:
+                med_val = inv_item.get('med_usableweight') or inv_item.get('med_usable_weight')
+                try:
+                    med = float(med_val) if med_val not in (None, '') else 0.0
+                except (TypeError, ValueError):
+                    pass
+            contribution = round(units * med, 2)
+            order_total += contribution
+            breakdown.append({
+                'batch_ref': batch_ref,
+                'units': units,
+                'matched_in_biotrack': matched,
+                'med_usableweight': med,
+                'contribution_g': contribution,
+            })
+
+        return jsonify({
+            'order_id': order_id,
+            'order_total_g': round(order_total, 2),
+            'line_items_breakdown': breakdown,
+            'sample_biotrack_ids': sample_biotrack_ids,
+            'hint': 'batch_ref must equal one of BioTrack inventory id to get non-zero weight.',
+        })
+    except Exception as e:
+        logger.error(f"weight-debug failed: {e}", exc_info=True)
+        return jsonify({'error': str(e)}), 500
+
 
 @app.route('/api/trips')
 @login_required
@@ -3011,9 +3208,9 @@ if __name__ == '__main__':
     logger.info("Starting Flask application", extra={
         'extra_fields': {
             'host': '0.0.0.0',
-            'port': 5000,
+            'port': 5001,
             'debug_mode': True,
             'training_mode': get_training_mode()
         }
     })
-    app.run(host='0.0.0.0', port=5000, debug=True) 
+    app.run(host='0.0.0.0', port=5001, debug=True) 

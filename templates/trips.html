@@ -19,6 +19,17 @@
         </div>
     </div>
     
+    <div class="mt-6 p-4 bg-gray-50 rounded-lg border border-gray-200">
+        <h2 class="text-sm font-semibold text-gray-900 mb-2">Trip status guide</h2>
+        <dl class="text-sm text-gray-700 space-y-1.5">
+            <div><dt class="inline font-medium">Pending</dt><dd class="inline"> — Trip created; awaiting validation and execution.</dd></div>
+            <div><dt class="inline font-medium">Validated</dt><dd class="inline"> — Pre-checks passed (e.g. different drivers, inventory available for fulfillment). Ready to execute.</dd></div>
+            <div><dt class="inline font-medium">Partially completed</dt><dd class="inline"> — Some BioTrack steps ran (e.g. inventory sublotted) but manifest or another step failed. Check BioTrack before retrying or closing.</dd></div>
+            <div><dt class="inline font-medium">Completed</dt><dd class="inline"> — All orders sublotted and manifested successfully.</dd></div>
+            <div><dt class="inline font-medium">Closed</dt><dd class="inline"> — Trip is inactive; closed to prevent accidental execution.</dd></div>
+        </dl>
+    </div>
+
     <div class="mt-8 flex flex-col">
         <div class="-my-2 -mx-4 overflow-x-auto sm:-mx-6 lg:-mx-8">
             <div class="inline-block min-w-full py-2 align-middle md:px-6 lg:px-8">

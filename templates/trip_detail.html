@@ -65,9 +65,32 @@
                 </div>
             </div>
             
-            <div class="bg-white overflow-hidden shadow rounded-lg">
+            <div class="bg-white overflow-hidden shadow rounded-lg" id="drivers-card"
+                 data-trip-id="{{ trip.id }}"
+                 data-driver1-biotrack-id="{{ trip.driver1.biotrack_id if trip.driver1 else '' }}"
+                 data-driver2-biotrack-id="{{ trip.driver2.biotrack_id if trip.driver2 else '' }}">
                 <div class="px-4 py-5 sm:p-6">
                     <dt class="text-sm font-medium text-gray-500 truncate">Drivers</dt>
+                    {% if trip.status == 'pending' %}
+                    <dd class="mt-1 text-sm text-gray-900 space-y-3">
+                        <div>
+                            <label for="driver1-select" class="sr-only">Driver 1</label>
+                            <select id="driver1-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                <option value="">Select driver 1...</option>
+                            </select>
+                        </div>
+                        <div>
+                            <label for="driver2-select" class="sr-only">Driver 2</label>
+                            <select id="driver2-select" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 text-sm">
+                                <option value="">Select driver 2 (optional)...</option>
+                            </select>
+                        </div>
+                        <button type="button" id="save-drivers-btn"
+                                class="inline-flex items-center rounded-md border border-transparent bg-blue-600 px-3 py-1.5 text-sm font-medium text-white shadow-sm hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-blue-500 focus:ring-offset-2">
+                            Save drivers
+                        </button>
+                    </dd>
+                    {% else %}
                     <dd class="mt-1 text-sm text-gray-900">
                         {% if trip.driver1 and trip.driver2 %}
                             {{ trip.driver1.name }}, {{ trip.driver2.name }}
@@ -79,6 +102,7 @@
                             No drivers assigned
                         {% endif %}
                     </dd>
+                    {% endif %}
                 </div>
             </div>
             
@@ -689,5 +713,79 @@ async function changeTripStatus(tripId, newStatus, currentStatus, selectElement)
         selectElement.value = currentStatus;
     }
 }
+
+// Load drivers and wire Save when trip is pending (driver dropdowns present)
+(function() {
+    const driver1Select = document.getElementById('driver1-select');
+    if (!driver1Select) return;
+    const card = document.getElementById('drivers-card');
+    const tripId = card && card.getAttribute('data-trip-id');
+    const driver2Select = document.getElementById('driver2-select');
+    const saveBtn = document.getElementById('save-drivers-btn');
+
+    async function loadDrivers() {
+        const res = await fetch('/api/drivers');
+        const data = await res.json();
+        return (data.drivers || []).map(d => ({ id: String(d.id), name: d.name }));
+    }
+
+    function populateSelect(select, drivers, selectedId) {
+        const fragment = document.createDocumentFragment();
+        drivers.forEach(d => {
+            const opt = document.createElement('option');
+            opt.value = d.id;
+            opt.textContent = d.name;
+            if (selectedId && String(d.id) === String(selectedId)) opt.selected = true;
+            fragment.appendChild(opt);
+        });
+        select.appendChild(fragment);
+    }
+
+    async function init() {
+        const drivers = await loadDrivers();
+        const d1Id = card.getAttribute('data-driver1-biotrack-id') || '';
+        const d2Id = card.getAttribute('data-driver2-biotrack-id') || '';
+        // Keep the first option (placeholder), add driver options
+        const opts1 = driver1Select.querySelectorAll('option');
+        for (let i = 1; i < opts1.length; i++) opts1[i].remove();
+        const opts2 = driver2Select.querySelectorAll('option');
+        for (let i = 1; i < opts2.length; i++) opts2[i].remove();
+        populateSelect(driver1Select, drivers, d1Id);
+        populateSelect(driver2Select, drivers, d2Id);
+    }
+
+    saveBtn.addEventListener('click', async function() {
+        const driver1Id = driver1Select.value;
+        if (!driver1Id) {
+            showErrorMessage('Please select Driver 1.');
+            return;
+        }
+        if (driver1Id && driver2Select.value && driver1Id === driver2Select.value) {
+            showErrorMessage('Driver 1 and Driver 2 must be different.');
+            return;
+        }
+        saveBtn.disabled = true;
+        try {
+            const res = await fetch(`/api/trips/${tripId}/drivers`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ driver1_id: driver1Id, driver2_id: driver2Select.value || null })
+            });
+            const result = await res.json();
+            if (result.success) {
+                showSuccessMessage(result.message || 'Drivers updated.');
+                setTimeout(() => location.reload(), 1000);
+            } else {
+                showErrorMessage(result.error || 'Failed to update drivers.');
+                saveBtn.disabled = false;
+            }
+        } catch (e) {
+            showErrorMessage(`Error: ${e.message}`);
+            saveBtn.disabled = false;
+        }
+    });
+
+    init();
+})();
 </script>
 {% endblock %} 

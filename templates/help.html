@@ -260,14 +260,15 @@
             </div>
             
             <div class="bg-green-50 rounded-lg p-4 mb-4">
-                <h3 class="font-medium text-green-900 mb-2">Available Statuses:</h3>
-                <ul class="text-green-800 space-y-2 text-sm">
-                    <li><strong>Pending</strong> (Yellow badge) - Trip is created but not yet validated. Execute button is available.</li>
-                    <li><strong>Validated</strong> (Orange badge) - Trip has been validated and is ready for execution. Execute button is available.</li>
-                    <li><strong>Completed</strong> (Blue badge) - Trip has been fully executed and all deliveries completed. Execute button is hidden.</li>
-                    <li><strong>Partially Completed</strong> (Orange badge) - Some deliveries completed but not all. Execute button is hidden.</li>
-                    <li><strong>Closed</strong> (Gray badge) - Trip was cancelled or is no longer needed. Execute button is hidden to prevent accidental execution.</li>
-                </ul>
+                <h3 class="font-medium text-green-900 mb-2">Statuses guide:</h3>
+                <p class="text-green-800 text-sm mb-2">What each trip status means and when you can execute:</p>
+                <dl class="text-green-800 space-y-2 text-sm">
+                    <div><dt class="font-medium">Pending</dt><dd class="ml-0 mt-0.5">(Yellow badge) — Trip created; awaiting validation and execution. Execute button is available. You can change drivers on the trip detail page while pending.</dd></div>
+                    <div><dt class="font-medium">Validated</dt><dd class="ml-0 mt-0.5">(Orange badge) — Pre-checks passed (e.g. different drivers, inventory available for fulfillment). Ready to execute. Execute button is available.</dd></div>
+                    <div><dt class="font-medium">Partially completed</dt><dd class="ml-0 mt-0.5">(Orange badge) — Some BioTrack steps ran (e.g. inventory sublotted) but manifest or another step failed. Check BioTrack before retrying or closing. Execute button is hidden.</dd></div>
+                    <div><dt class="font-medium">Completed</dt><dd class="ml-0 mt-0.5">(Blue badge) — All orders sublotted and manifested successfully. Execute button is hidden.</dd></div>
+                    <div><dt class="font-medium">Closed</dt><dd class="ml-0 mt-0.5">(Gray badge) — Trip is inactive; closed to prevent accidental execution. Use for trips created by mistake or no longer needed.</dd></div>
+                </dl>
             </div>
             
             <div class="bg-yellow-50 rounded-lg p-4">
