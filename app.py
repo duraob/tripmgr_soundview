@@ -159,7 +159,7 @@ app.config['SQLALCHEMY_ENGINE_OPTIONS'] = {
 }
 
 # Import models and get db instance
-from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, CustomerContact, GlobalPreference, TripExecution
+from models import db, User, Trip, Order, TripOrder, Driver, Vehicle, Vendor, Room, LocationMapping, Customer, GlobalPreference, TripExecution
 
 # Initialize extensions
 migrate = Migrate(app, db)
@@ -2056,45 +2056,6 @@ def import_mappings():
         return jsonify({'error': str(e)}), 500
 
 
-@app.route('/api/contacts/export')
-@login_required
-def export_contacts():
-    """Export customer contacts as CSV"""
-    try:
-        from io import StringIO
-        import csv
-        
-        contacts = db.session.query(CustomerContact).join(Vendor).all()
-        
-        output = StringIO()
-        writer = csv.writer(output)
-        
-        # Write header
-        writer.writerow(['Contact Name', 'Email', 'Vendor Name', 'Is Primary'])
-        
-        # Write data
-        for contact in contacts:
-            writer.writerow([
-                contact.contact_name,
-                contact.email,
-                contact.vendor.name if contact.vendor else '',
-                'Yes' if contact.is_primary else 'No'
-            ])
-        
-        output.seek(0)
-        
-        from flask import Response
-        return Response(
-            output.getvalue(),
-            mimetype='text/csv',
-            headers={'Content-Disposition': 'attachment; filename=contacts.csv'}
-        )
-        
-    except Exception as e:
-        logger = logging.getLogger('app.export_contacts')
-        logger.error(f"Error exporting contacts: {str(e)}", exc_info=True)
-        return jsonify({'error': f'Error exporting contacts: {str(e)}'}), 500
-
 @app.route('/api/vendors/export')
 @login_required
 def export_vendors():
@@ -2736,122 +2697,6 @@ def validate_trip_endpoint(trip_id):
         logger.error(f"Error in validate_trip_endpoint: {str(e)}")
         return jsonify({'error': f'Error validating trip: {str(e)}'}), 500
 
-# Customer Contact Management API Endpoints
-
-@app.route('/api/contacts')
-@login_required
-def get_contacts():
-    """Get all customer contacts"""
-    try:
-        from models import CustomerContact, Vendor
-        
-        contacts = CustomerContact.query.join(Vendor).all()
-        contacts_data = []
-        
-        for contact in contacts:
-            contacts_data.append({
-                'id': contact.id,
-                'vendor_id': contact.vendor_id,
-                'vendor_name': contact.vendor.name,
-                'contact_name': contact.contact_name,
-                'email': contact.email,
-                'is_primary': contact.is_primary
-            })
-        
-        return jsonify({'success': True, 'contacts': contacts_data})
-        
-    except Exception as e:
-        logger.error(f"Error getting contacts: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/contacts', methods=['POST'])
-@login_required
-def create_contact():
-    """Create a new customer contact"""
-    try:
-        from models import CustomerContact
-        
-        data = request.get_json()
-        
-        # Validate required fields
-        required_fields = ['vendor_id', 'contact_name', 'email']
-        for field in required_fields:
-            if not data.get(field):
-                return jsonify({'error': f'{field} is required'}), 400
-        
-        # Create new contact
-        contact = CustomerContact(
-            vendor_id=data['vendor_id'],
-            contact_name=data['contact_name'],
-            email=data['email'],
-            is_primary=data.get('is_primary', False)
-        )
-        
-        db.session.add(contact)
-        db.session.commit()
-        
-        return jsonify({
-            'success': True, 
-            'message': 'Contact created successfully',
-            'contact_id': contact.id
-        })
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error creating contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/contacts/<int:contact_id>', methods=['PUT'])
-@login_required
-def update_contact(contact_id):
-    """Update a customer contact"""
-    try:
-        from models import CustomerContact
-        
-        contact = CustomerContact.query.get(contact_id)
-        if not contact:
-            return jsonify({'error': 'Contact not found'}), 404
-        
-        data = request.get_json()
-        
-        # Update fields
-        if 'contact_name' in data:
-            contact.contact_name = data['contact_name']
-        if 'email' in data:
-            contact.email = data['email']
-        if 'is_primary' in data:
-            contact.is_primary = data['is_primary']
-        
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': 'Contact updated successfully'})
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error updating contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
-@app.route('/api/contacts/<int:contact_id>', methods=['DELETE'])
-@login_required
-def delete_contact(contact_id):
-    """Delete a customer contact"""
-    try:
-        from models import CustomerContact
-        
-        contact = CustomerContact.query.get(contact_id)
-        if not contact:
-            return jsonify({'error': 'Contact not found'}), 404
-        
-        db.session.delete(contact)
-        db.session.commit()
-        
-        return jsonify({'success': True, 'message': 'Contact deleted successfully'})
-        
-    except Exception as e:
-        db.session.rollback()
-        logger.error(f"Error deleting contact: {e}")
-        return jsonify({'error': str(e)}), 500
-
 # Global Preferences API endpoints
 @app.route('/api/global-preferences')
 @login_required
@@ -3007,11 +2852,6 @@ def clear_selected_rooms():
         db.session.rollback()
         return jsonify({'error': str(e)}), 500
 
-@app.route('/contacts')
-@login_required
-def contacts():
-    """Customer contacts management page"""
-    return render_template('contacts.html')
 
 # Simplified Report Generation Endpoints
 @app.route('/api/inventory-report/generate-simple', methods=['POST'])

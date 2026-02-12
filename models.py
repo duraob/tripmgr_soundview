@@ -158,16 +158,6 @@ class APIRefreshLog(db.Model):
     
     __table_args__ = (db.UniqueConstraint('api_name', name='unique_api_name'),)
 
-class CustomerContact(db.Model):
-    """Customer contacts attached to BioTrack vendors"""
-    id = db.Column(db.Integer, primary_key=True)
-    vendor_id = db.Column(db.Integer, db.ForeignKey('vendor.id'), nullable=False)
-    contact_name = db.Column(db.String(200), nullable=False)
-    email = db.Column(db.String(200), nullable=False)
-    is_primary = db.Column(db.Boolean, default=False)
-    
-    vendor = db.relationship('Vendor', backref='contacts')
-
 # Junction table for many-to-many relationship between trips and drivers
 trip_drivers = db.Table('trip_drivers',
     db.Column('trip_id', db.Integer, db.ForeignKey('trip.id'), primary_key=True),
