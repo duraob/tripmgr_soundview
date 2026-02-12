@@ -1963,6 +1963,99 @@ def export_mappings():
         logger.error(f"Error exporting mappings: {str(e)}", exc_info=True)
         return jsonify({'error': f'Error exporting mappings: {str(e)}'}), 500
 
+
+@app.route('/api/mapping/import', methods=['POST'])
+@login_required
+def import_mappings():
+    """Import location mappings from CSV. Optional form field default_biotrack_room_id applies to rows with empty Default Room."""
+    try:
+        import csv
+        from io import StringIO
+
+        if 'file' not in request.files:
+            return jsonify({'error': 'No file provided'}), 400
+        f = request.files['file']
+        if not f.filename or not f.filename.lower().endswith('.csv'):
+            return jsonify({'error': 'Please upload a CSV file'}), 400
+
+        default_room_id = request.form.get('default_biotrack_room_id') or None
+        if default_room_id == '':
+            default_room_id = None
+
+        stream = StringIO(f.stream.read().decode('utf-8', errors='replace'))
+        reader = csv.DictReader(stream)
+        if not reader.fieldnames:
+            return jsonify({'error': 'CSV file is empty or invalid'}), 400
+
+        # Normalize headers: strip and accept with or without Vendor Name column
+        fieldnames = [h.strip() for h in reader.fieldnames]
+        required = ['Customer Name', 'Customer Location', 'BioTrack Vendor ID', 'Default Room', 'Status']
+        if not all(h in fieldnames for h in required):
+            return jsonify({'error': 'CSV must have headers: Customer Name, Customer Location, BioTrack Vendor ID, Default Room, Status'}), 400
+
+        created = 0
+        skipped_no_customer = 0
+        skipped_duplicate = 0
+        skipped_rows = []
+
+        for row in reader:
+            row = {k.strip(): v for k, v in row.items()}
+            cust_name = (row.get('Customer Name') or '').strip()
+            cust_location = (row.get('Customer Location') or '').strip()
+            vendor_id = (row.get('BioTrack Vendor ID') or '').strip()
+            default_room_cell = (row.get('Default Room') or '').strip()
+            status_cell = (row.get('Status') or '').strip().lower()
+
+            if not cust_name or not vendor_id:
+                continue
+
+            customer = db.session.query(Customer).filter_by(
+                customer_name=cust_name,
+                name=cust_location
+            ).first()
+            if not customer:
+                skipped_no_customer += 1
+                if len(skipped_rows) < 10:
+                    skipped_rows.append(f"{cust_name} / {cust_location}")
+                continue
+
+            leaftrade_dispensary_location_id = int(customer.leaftrade_customer_id)
+            room_id = default_room_cell if default_room_cell else default_room_id
+            is_active = status_cell != 'inactive'
+
+            existing = db.session.query(LocationMapping).filter_by(
+                leaftrade_dispensary_location_id=leaftrade_dispensary_location_id,
+                biotrack_vendor_id=vendor_id
+            ).first()
+            if existing:
+                skipped_duplicate += 1
+                continue
+
+            mapping = LocationMapping(
+                customer_id=customer.id,
+                leaftrade_dispensary_location_id=leaftrade_dispensary_location_id,
+                biotrack_vendor_id=vendor_id,
+                default_biotrack_room_id=room_id or None,
+                is_active=is_active
+            )
+            db.session.add(mapping)
+            created += 1
+
+        db.session.commit()
+        return jsonify({
+            'success': True,
+            'created': created,
+            'skipped_no_customer': skipped_no_customer,
+            'skipped_duplicate': skipped_duplicate,
+            'skipped_rows': skipped_rows
+        })
+    except Exception as e:
+        logger = logging.getLogger('app.import_mappings')
+        logger.error(f"Error importing mappings: {str(e)}", exc_info=True)
+        db.session.rollback()
+        return jsonify({'error': str(e)}), 500
+
+
 @app.route('/api/contacts/export')
 @login_required
 def export_contacts():

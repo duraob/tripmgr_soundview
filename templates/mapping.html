@@ -26,6 +26,13 @@
                     </svg>
                     Export
                 </a>
+                <button onclick="showImportModal()" 
+                        class="inline-flex items-center px-4 py-2 bg-white border border-gray-300 hover:bg-gray-50 text-gray-700 font-medium rounded-lg transition-colors duration-200">
+                    <svg class="w-5 h-5 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-8l-4-4m0 0L8 8m4-4v12"></path>
+                    </svg>
+                    Import
+                </button>
             </div>
         </div>
     </div>
@@ -251,6 +258,45 @@
                             class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200">
                         <span class="spinner-border spinner-border-sm d-none" role="status"></span>
                         Save Mapping
+                    </button>
+                </div>
+            </form>
+        </div>
+    </div>
+</div>
+
+<!-- Import Mappings Modal -->
+<div class="fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full hidden" id="importModal">
+    <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+        <div class="mt-3">
+            <div class="flex items-center justify-between mb-4">
+                <h3 class="text-lg font-semibold text-gray-900">Import Mappings from CSV</h3>
+                <button onclick="closeImportModal()" class="text-gray-400 hover:text-gray-600">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+            <form id="import-form" class="space-y-4">
+                <div>
+                    <label for="import-file" class="block text-sm font-medium text-gray-700 mb-1">CSV file *</label>
+                    <input type="file" id="import-file" name="file" accept=".csv" required
+                           class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                </div>
+                <div>
+                    <label for="import-default-room" class="block text-sm font-medium text-gray-700 mb-1">Default room for rows with no room</label>
+                    <select id="import-default-room" name="default_biotrack_room_id" class="w-full px-3 py-2 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500">
+                        <option value="">None</option>
+                    </select>
+                </div>
+                <div class="flex space-x-3 pt-4">
+                    <button type="button" onclick="closeImportModal()"
+                            class="flex-1 px-4 py-2 bg-gray-300 hover:bg-gray-400 text-gray-700 font-medium rounded-lg transition-colors duration-200">
+                        Cancel
+                    </button>
+                    <button type="button" onclick="submitImport()" id="import-btn"
+                            class="flex-1 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition-colors duration-200">
+                        Import
                     </button>
                 </div>
             </form>
@@ -675,6 +721,62 @@ function renderMappings() {
         `;
         tbody.appendChild(row);
     });
+}
+
+function showImportModal() {
+    document.getElementById('import-form').reset();
+    const sel = document.getElementById('import-default-room');
+    sel.innerHTML = '<option value="">None</option>';
+    rooms.sort((a, b) => (a.name || '').localeCompare(b.name || '')).forEach(r => {
+        const opt = document.createElement('option');
+        opt.value = r.biotrack_room_id;
+        opt.textContent = r.name;
+        sel.appendChild(opt);
+    });
+    document.getElementById('importModal').classList.remove('hidden');
+}
+
+function closeImportModal() {
+    document.getElementById('importModal').classList.add('hidden');
+}
+
+async function submitImport() {
+    const fileInput = document.getElementById('import-file');
+    if (!fileInput.files || !fileInput.files[0]) {
+        showAlert('Please select a CSV file', 'error');
+        return;
+    }
+    const btn = document.getElementById('import-btn');
+    btn.disabled = true;
+    btn.textContent = 'Importing...';
+    try {
+        const formData = new FormData();
+        formData.append('file', fileInput.files[0]);
+        const defaultRoom = document.getElementById('import-default-room').value;
+        if (defaultRoom) formData.append('default_biotrack_room_id', defaultRoom);
+        const res = await fetch('/api/mapping/import', { method: 'POST', body: formData });
+        const result = await res.json();
+        if (result.success) {
+            let msg = `Created ${result.created} mapping(s).`;
+            if (result.skipped_no_customer) msg += ` ${result.skipped_no_customer} skipped (no matching customer).`;
+            if (result.skipped_duplicate) msg += ` ${result.skipped_duplicate} skipped (duplicate).`;
+            if (result.skipped_rows && result.skipped_rows.length) msg += ' Examples: ' + result.skipped_rows.slice(0, 3).join('; ');
+            showAlert(msg, 'success');
+            closeImportModal();
+            const mappingsResponse = await fetch('/api/mapping');
+            mappings = await mappingsResponse.json();
+            updateCounts();
+            filterMappings();
+            renderMappings();
+        } else {
+            showAlert(result.error || 'Import failed', 'error');
+        }
+    } catch (e) {
+        showAlert('Import failed. Please try again.', 'error');
+    } finally {
+        btn.disabled = false;
+        btn.textContent = 'Import';
+    }
 }
 
 function showAddMapping() {
