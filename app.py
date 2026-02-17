@@ -917,25 +917,23 @@ def _order_total_usable_weight(order_details, inventory_data):
 def get_orders():
     """API endpoint to get orders from LeafTrade with total_usable_weight from BioTrack sync_inventory."""
     logger = logging.getLogger('app.api.orders')
-    logger.info(f"Fetching orders with status: {request.args.get('status', 'approved')}")
+    t0 = time.perf_counter()
+    logger.info("get_orders start status=%s", request.args.get('status', 'approved'))
     
     try:
         from api.leaftrade import get_orders as leaftrade_get_orders, get_order_details as leaftrade_get_order_details
         from api.biotrack import get_auth_token, get_inventory_info
         
-        # Get status from query parameter, default to 'approved'
         status = request.args.get('status', 'approved')
-        logger.debug(f"Requested order status: {status}")
         
-        # Fetch orders from LeafTrade
-        logger.debug("Calling LeafTrade API to fetch orders")
+        t1 = time.perf_counter()
         orders_data = leaftrade_get_orders(status=status)
+        logger.info("get_orders LeafTrade list elapsed_sec=%.2f order_count=%s", time.perf_counter() - t1, len(orders_data) if orders_data else 0)
         
         if orders_data is None:
             logger.error("LeafTrade API returned None - no orders data")
             return jsonify({'error': 'Failed to fetch orders from LeafTrade'}), 500
         
-        # Convert dictionary to array format expected by frontend
         orders_array = []
         if isinstance(orders_data, dict):
             for order_id, order_info in orders_data.items():
@@ -949,17 +947,20 @@ def get_orders():
                 }
                 orders_array.append(order_array_item)
         
-        # Aggregate pull: BioTrack inventory once, then per-order details for usable weight
+        t2 = time.perf_counter()
         try:
             token = get_auth_token()
             inventory_data = get_inventory_info(token) if token else None
         except Exception as e:
             logger.warning(f"BioTrack inventory unavailable for usable weight: {e}")
             inventory_data = None
+        logger.info("get_orders BioTrack auth+inventory elapsed_sec=%.2f has_inventory=%s", time.perf_counter() - t2, inventory_data is not None)
         
-        order_weights = {}
+        max_orders_for_weight = 25
+        order_weights = {str(o['id']): 0.0 for o in orders_array}
         if inventory_data:
-            for order_array_item in orders_array:
+            t3 = time.perf_counter()
+            for order_array_item in orders_array[:max_orders_for_weight]:
                 try:
                     details = leaftrade_get_order_details(order_array_item['id'])
                     w = _order_total_usable_weight(details, inventory_data)
@@ -970,10 +971,14 @@ def get_orders():
                     logger.debug(f"Order {order_array_item['id']} details failed for usable weight: {e}")
                     order_array_item['total_usable_weight'] = 0.0
                     order_weights[str(order_array_item['id'])] = 0.0
+            for order_array_item in orders_array[max_orders_for_weight:]:
+                order_array_item['total_usable_weight'] = 0.0
+            logger.info("get_orders per-order details elapsed_sec=%.2f orders_fetched=%s total_orders=%s", time.perf_counter() - t3, min(len(orders_array), max_orders_for_weight), len(orders_array))
         else:
             for order_array_item in orders_array:
                 order_weights[str(order_array_item['id'])] = 0.0
 
+        logger.info("get_orders total elapsed_sec=%.2f returning orders=%s", time.perf_counter() - t0, len(orders_array))
         if orders_array:
             o0 = orders_array[0]
             logger.info(
