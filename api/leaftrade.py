@@ -11,16 +11,26 @@ Production-ready features:
 - Comprehensive error handling and logging
 - Retry mechanisms with exponential backoff
 - Input validation and sanitization
-- Rate limiting considerations
+- Rate limiting (see below)
 - Proper exception handling
 - Type hints and documentation
 - Pagination handling for large datasets
+
+Rate limiting (LeafTrade API docs):
+- Burst: 100 requests per minute. Exceeding returns 429.
+- Sustained: 1000 requests per hour. Exceeding returns 429.
+All outbound requests MUST go through _make_api_request(), which enforces the
+burst limit and retries once on 429. Future enhancements that call LeafTrade
+should use this module's public functions (or _make_api_request) so rate limits
+are respected; do not add new direct HTTP calls that bypass this throttle.
 """
 
 import os
 import logging
 import time
 import json
+import threading
+from collections import deque
 from typing import Dict, List, Optional, Any, Union
 from datetime import datetime, date
 from functools import wraps
@@ -37,6 +47,13 @@ logger = logging.getLogger(__name__)
 MAX_RETRIES = 3
 RETRY_DELAY = 1  # seconds
 REQUEST_TIMEOUT = 30  # seconds
+
+# LeafTrade rate limits (from API docs). Enforced in _make_api_request().
+LEAFTRADE_RATE_LIMIT_BURST = 100   # requests per minute
+LEAFTRADE_RATE_LIMIT_WINDOW = 60   # seconds
+LEAFTRADE_429_RETRY_AFTER = 61     # seconds before retry after 429
+_rate_limit_timestamps = deque(maxlen=LEAFTRADE_RATE_LIMIT_BURST)
+_rate_limit_lock = threading.Lock()
 
 # Environment variables
 LEAFTRADE_API_URL = os.getenv("LEAFTRADE_API_URL")
@@ -107,49 +124,67 @@ def validate_status(status: str) -> str:
     return status
 
 
+def _wait_for_rate_limit() -> None:
+    """Sleep if needed so we stay under LeafTrade burst limit (100 requests per minute)."""
+    while True:
+        with _rate_limit_lock:
+            now = time.monotonic()
+            while _rate_limit_timestamps and _rate_limit_timestamps[0] < now - LEAFTRADE_RATE_LIMIT_WINDOW:
+                _rate_limit_timestamps.popleft()
+            if len(_rate_limit_timestamps) < LEAFTRADE_RATE_LIMIT_BURST:
+                return
+            wait = LEAFTRADE_RATE_LIMIT_WINDOW - (now - _rate_limit_timestamps[0])
+        if wait > 0:
+            logger.debug("LeafTrade rate limit: sleeping %.1fs (burst %d/min)", wait, LEAFTRADE_RATE_LIMIT_BURST)
+            time.sleep(wait)
+
+
+def _record_request_time() -> None:
+    """Record that a LeafTrade request was made (for burst throttling)."""
+    with _rate_limit_lock:
+        _rate_limit_timestamps.append(time.monotonic())
+
+
 @retry_on_failure()
 def _make_api_request(url: str, headers: Dict[str, str], params: Optional[Dict[str, Any]] = None, action: str = "API request") -> Optional[Dict[str, Any]]:
     """
     Make a standardized API request to LeafTrade with proper error handling.
-    
-    Args:
-        url: Request URL
-        headers: Request headers
-        params: Query parameters (optional)
-        action: API action being performed (for logging)
-    
-    Returns:
-        Response JSON data or None if failed
+    Enforces LeafTrade rate limits (100/min burst; retries once on 429).
+    All LeafTrade HTTP calls must go through this function.
     """
     if not validate_config():
         raise ValueError("LeafTrade configuration is invalid")
-    
     try:
         logger.debug(f"Making LeafTrade API request: {action}")
         logger.debug(f"Request URL: {url}")
         logger.debug(f"Request headers: {headers}")
         logger.debug(f"Request params: {params}")
+        _wait_for_rate_limit()
         response = requests.get(
             url,
             headers=headers,
             params=params,
             timeout=REQUEST_TIMEOUT
         )
-        
+        _record_request_time()
+        if response.status_code == 429:
+            logger.warning("LeafTrade rate limit (429); retrying once after %ds", LEAFTRADE_429_RETRY_AFTER)
+            time.sleep(LEAFTRADE_429_RETRY_AFTER)
+            _wait_for_rate_limit()
+            response = requests.get(url, headers=headers, params=params, timeout=REQUEST_TIMEOUT)
+            _record_request_time()
         response.raise_for_status()
-        
         try:
             json_data = response.json()
             logger.debug(f"LeafTrade API response for {action}: {json_data}")
             return json_data
         except json.JSONDecodeError as e:
             logger.error(f"Failed to parse JSON response for {action}: {e}")
-            logger.error(f"Response content: {response.text[:500]}...")  # Log first 500 chars
+            logger.error(f"Response content: {response.text[:500]}...")
             if response.text.startswith('<!doctype') or response.text.startswith('<html'):
                 logger.error(f"Received HTML response instead of JSON for {action}")
                 raise ValueError(f"API returned HTML instead of JSON for {action}")
             raise
-            
     except requests.exceptions.HTTPError as e:
         logger.error(f"HTTP error for {action}: {e.response.status_code} - {e.response.text}")
         raise
