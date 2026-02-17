@@ -915,96 +915,68 @@ def _order_total_usable_weight(order_details, inventory_data):
 @app.route('/api/orders')
 @login_required
 def get_orders():
-    """API endpoint to get orders from LeafTrade with total_usable_weight from BioTrack sync_inventory."""
+    """Return orders from LeafTrade quickly. Weights are fetched separately via /api/orders/weights."""
     logger = logging.getLogger('app.api.orders')
     t0 = time.perf_counter()
-    logger.info("get_orders start status=%s", request.args.get('status', 'approved'))
-    
+    status = request.args.get('status', 'approved')
+    logger.info("get_orders start status=%s", status)
     try:
-        from api.leaftrade import get_orders as leaftrade_get_orders, get_order_details as leaftrade_get_order_details
-        from api.biotrack import get_auth_token, get_inventory_info
-        
-        status = request.args.get('status', 'approved')
-        
-        t1 = time.perf_counter()
+        from api.leaftrade import get_orders as leaftrade_get_orders
         orders_data = leaftrade_get_orders(status=status)
-        logger.info("get_orders LeafTrade list elapsed_sec=%.2f order_count=%s", time.perf_counter() - t1, len(orders_data) if orders_data else 0)
-        
+        logger.info("get_orders LeafTrade list elapsed_sec=%.2f order_count=%s", time.perf_counter() - t0, len(orders_data) if orders_data else 0)
         if orders_data is None:
             logger.error("LeafTrade API returned None - no orders data")
             return jsonify({'error': 'Failed to fetch orders from LeafTrade'}), 500
-        
         orders_array = []
         if isinstance(orders_data, dict):
             for order_id, order_info in orders_data.items():
-                order_array_item = {
+                orders_array.append({
                     'id': order_id,
                     'customer_name': order_info.get('customer_name', 'Unknown Customer'),
                     'customer_location': order_info.get('customer_location', 'Unknown Location'),
                     'delivery_date': order_info.get('delivery_date', 'Not specified'),
                     'dispensary_id': order_info.get('dispensary_id'),
-                    'total_usable_weight': 0.0
-                }
-                orders_array.append(order_array_item)
-        
-        t2 = time.perf_counter()
-        try:
-            token = get_auth_token()
-            inventory_data = get_inventory_info(token) if token else None
-        except Exception as e:
-            logger.warning(f"BioTrack inventory unavailable for usable weight: {e}")
-            inventory_data = None
-        logger.info("get_orders BioTrack auth+inventory elapsed_sec=%.2f has_inventory=%s", time.perf_counter() - t2, inventory_data is not None)
-        
-        max_orders_for_weight = 25
+                    'total_usable_weight': 0.0,
+                })
         order_weights = {str(o['id']): 0.0 for o in orders_array}
-        if inventory_data:
-            t3 = time.perf_counter()
-            for order_array_item in orders_array[:max_orders_for_weight]:
-                try:
-                    details = leaftrade_get_order_details(order_array_item['id'])
-                    w = _order_total_usable_weight(details, inventory_data)
-                    val = float(w)
-                    order_array_item['total_usable_weight'] = val
-                    order_weights[str(order_array_item['id'])] = val
-                except Exception as e:
-                    logger.debug(f"Order {order_array_item['id']} details failed for usable weight: {e}")
-                    order_array_item['total_usable_weight'] = 0.0
-                    order_weights[str(order_array_item['id'])] = 0.0
-            for order_array_item in orders_array[max_orders_for_weight:]:
-                order_array_item['total_usable_weight'] = 0.0
-            logger.info("get_orders per-order details elapsed_sec=%.2f orders_fetched=%s total_orders=%s", time.perf_counter() - t3, min(len(orders_array), max_orders_for_weight), len(orders_array))
-        else:
-            for order_array_item in orders_array:
-                order_weights[str(order_array_item['id'])] = 0.0
-
-        logger.info("get_orders total elapsed_sec=%.2f returning orders=%s", time.perf_counter() - t0, len(orders_array))
-        if orders_array:
-            o0 = orders_array[0]
-            logger.info(
-                "get_orders weights: sample order_id=%s total_usable_weight=%s order_weights_keys=%s",
-                o0.get('id'),
-                o0.get('total_usable_weight'),
-                list(order_weights.keys())[:3] if order_weights else [],
-            )
-        logger.info(f"Successfully fetched and formatted {len(orders_array)} orders for frontend")
         return jsonify({'orders': orders_array, 'order_weights': order_weights})
-        
     except Exception as e:
         logger.error(f"Exception in get_orders: {str(e)}", exc_info=True)
-        # Fallback to mock data for testing
-        logger.info("Falling back to mock order data for testing")
-        mock_orders = [
-            {
-                'id': '1043337',
-                'customer_name': 'Budr - Danbury MILL PLAIN RD - MED',
-                'customer_location': 'Budr - Danbury MILL PLAIN RD - MED - 2025-08-01',
-                'delivery_date': '2025-08-01',
-                'dispensary_id': '1280',
-                'total_usable_weight': 0.0,
-            }
-        ]
+        mock_orders = [{'id': '1043337', 'customer_name': 'Budr - Danbury MILL PLAIN RD - MED', 'customer_location': 'Budr - Danbury MILL PLAIN RD - MED - 2025-08-01', 'delivery_date': '2025-08-01', 'dispensary_id': '1280', 'total_usable_weight': 0.0}]
         return jsonify({'orders': mock_orders, 'order_weights': {'1043337': 0.0}})
+
+
+@app.route('/api/orders/weights')
+@login_required
+def get_orders_weights():
+    """Return usable weights for given order IDs (comma-separated). Capped at 25 per request to avoid timeout."""
+    logger = logging.getLogger('app.api.orders')
+    ids_param = request.args.get('ids', '')
+    if not ids_param:
+        return jsonify({})
+    order_ids = [x.strip() for x in ids_param.split(',') if x.strip()][:25]
+    if not order_ids:
+        return jsonify({})
+    try:
+        from api.leaftrade import get_order_details as leaftrade_get_order_details
+        from api.biotrack import get_auth_token, get_inventory_info
+        token = get_auth_token()
+        inventory_data = get_inventory_info(token) if token else None
+        if not inventory_data:
+            return jsonify({str(oid): 0.0 for oid in order_ids})
+        weights = {}
+        for oid in order_ids:
+            try:
+                details = leaftrade_get_order_details(oid)
+                w = _order_total_usable_weight(details, inventory_data)
+                weights[str(oid)] = float(w)
+            except Exception as e:
+                logger.debug("Order %s weight failed: %s", oid, e)
+                weights[str(oid)] = 0.0
+        return jsonify(weights)
+    except Exception as e:
+        logger.warning("get_orders_weights failed: %s", e)
+        return jsonify({str(oid): 0.0 for oid in order_ids})
 
 @app.route('/api/orders/<order_id>/details')
 @login_required

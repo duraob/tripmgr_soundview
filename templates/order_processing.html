@@ -41,6 +41,14 @@
                         </div>
                     </div>
                     
+                    <div id="orders-weights-loading" class="hidden flex items-center gap-2 text-sm text-blue-600 mb-2">
+                        <svg class="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        <span>Loading usable weights…</span>
+                    </div>
+                    
                     <div id="orders-container" class="space-y-3">
                         <p class="text-gray-500 text-sm">Click "Load Orders" to fetch approved orders from LeafTrade</p>
                     </div>
@@ -100,6 +108,7 @@
 <script>
 // Global variables
 let availableOrders = [];
+let orderWeightsMap = {};
 let availableRooms = [];
 let selectedOrderId = null;
 
@@ -131,15 +140,45 @@ async function loadOrders() {
         containerEl.innerHTML = '<p class="text-gray-500 text-sm">Loading orders...</p>';
         
         const response = await fetch('/api/orders?status=approved');
-        const data = await response.json();
-        
+        let data;
+        try {
+            data = await response.json();
+        } catch (_) {
+            throw new Error(response.ok ? 'Invalid response from server.' : 'Request timed out or server error. Please try again.');
+        }
         if (data.error) {
             throw new Error(data.error);
         }
         
-        availableOrders = data.orders || [];
-        selectedOrderId = null; // Clear selection when loading new orders
+        orderWeightsMap = data.order_weights || {};
+        availableOrders = (data.orders || []).map(o => ({
+            ...o,
+            total_usable_weight: Number(orderWeightsMap[String(o.id)] ?? o.total_usable_weight ?? 0) || 0
+        }));
+        selectedOrderId = null;
         displayOrders(availableOrders);
+        
+        const weightsEl = document.getElementById('orders-weights-loading');
+        const chunkSize = 25;
+        if (availableOrders.length > 0 && weightsEl) {
+            weightsEl.classList.remove('hidden');
+            try {
+                const ids = availableOrders.map(o => String(o.id));
+                for (let i = 0; i < ids.length; i += chunkSize) {
+                    const chunk = ids.slice(i, i + chunkSize);
+                    const r = await fetch('/api/orders/weights?ids=' + encodeURIComponent(chunk.join(',')));
+                    const weights = await r.json();
+                    Object.assign(orderWeightsMap, weights);
+                    availableOrders.forEach(o => {
+                        const w = weights[String(o.id)];
+                        if (w !== undefined) o.total_usable_weight = w;
+                    });
+                    displayOrders(availableOrders);
+                }
+            } finally {
+                weightsEl.classList.add('hidden');
+            }
+        }
         
     } catch (error) {
         showError('Error loading orders: ' + error.message);
