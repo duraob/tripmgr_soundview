@@ -427,7 +427,7 @@ def new_trip():
             # Parse date and time with DST handling
             delivery_date = datetime.strptime(data['delivery_date'], '%Y-%m-%d').date()
             from utils.timezone import create_est_datetime_with_dst
-            approximate_start_time = create_est_datetime_with_dst(delivery_date, data['approximate_start_time'])
+            approximate_start_time = create_est_datetime_with_dst(delivery_date, data['approximate_start_time']).replace(tzinfo=None)
             
             # Create new trip
             trip = Trip(
