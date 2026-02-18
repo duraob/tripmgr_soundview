@@ -43,6 +43,7 @@ BIOTRACK_API_URL = os.getenv("BIOTRACK_API_URL")
 BIOTRACK_USERNAME = os.getenv("BIOTRACK_USERNAME")
 BIOTRACK_PASSWORD = os.getenv("BIOTRACK_PASSWORD")
 BIOTRACK_UBI = os.getenv("BIOTRACK_UBI")
+BIOTRACK_DEFAULT_LOCATION = os.getenv("BIOTRACK_DEFAULT_LOCATION", "ACFB0000681")
 
 
 def validate_config() -> bool:
@@ -880,7 +881,7 @@ def post_manifest(
     manifest_info: Dict[str, Any],
     drivers: Union[str, List[str]],
     vehicle: str,
-    location: str = "ACFB0000681"
+    location: Optional[str] = None
 ) -> Optional[Dict[str, Any]]:
     """
     Create inventory manifest in BioTrack.
@@ -928,7 +929,7 @@ def post_manifest(
             - vendor_license: Vendor license number
         drivers: Driver ID(s) - list of strings
         vehicle: Vehicle ID
-        location: Location ID (default: "ACME0008473")
+        location: Location (license) ID; if not provided, uses BIOTRACK_DEFAULT_LOCATION from env
     
     Returns:
         Response data or None if failed
@@ -940,6 +941,9 @@ def post_manifest(
         logger.error("Invalid manifest_info, drivers, or vehicle provided")
         return None
     
+    if location is None:
+        location = BIOTRACK_DEFAULT_LOCATION
+
     # Import training mode function from app
     import sys
     import os
